@@ -26,10 +26,10 @@ contrário).
 
 - **Login em camadas**: só PIN; a senha mestra só é oferecida após 3 falhas de
   PIN; a frase de recuperação (≥ 12 palavras, escrita pelo próprio usuário)
-  serve só para redefinir o PIN — nunca loga. Tentativas erradas disparam
+  serve só para redefinir o PIN; nunca loga. Tentativas erradas disparam
   trava exponencial (10 s → 24 h) persistida em disco.
 - **Chave sempre protegida**: as chaves passam por Argon2id com 64 MB de
-  memória (t=3, p=4) — custo alto de propósito — e vivem só na memória do
+  memória (t=3, p=4; custo alto de propósito) e vivem só na memória do
   processo main: zeradas no lock e no auto-lock de 5 minutos, nunca por IPC,
   nunca em log. Erros do cofre não ecoam senha, PIN ou frase.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
@@ -37,10 +37,10 @@ contrário).
   embrulhadas, trava exponencial e manifesto cifrado.
 - **Integridade fail-closed**: o manifesto cifrado lista os registros; arquivo
   removido ou injetado de fora do app vira um único erro de adulteração, sem
-  detalhes — nada é carregado.
+  detalhes: nada é carregado.
 - **Cofre fora de `~/`**: `/var/lib/.guardinha/` é `root:root 0711` sem
   listagem (navegar/excluir o topo exige sudo) e o cofre é 0700 com dono
-  usuário — sobrevive à limpeza da pasta do usuário e não fica em caminhos
+  usuário, sobrevive à limpeza da pasta do usuário e não fica em caminhos
   triviais de backup sincronizado.
 - **Senha de administrador fora do app**: a criação da estrutura usa
   PolicyKit (`pkexec` + helper `guardinha-setup` do pacote, ação
@@ -48,17 +48,17 @@ contrário).
   nunca passa pelo app nem por IPC.
 - **Renderer isolado**: CSP estrita no `index.html`, preload sandboxed
   (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`), sem
-  HTML dinâmico; o renderer não acessa disco, rede nem Node — só
+  HTML dinâmico; o renderer não acessa disco, rede nem Node; só
   `ipcRenderer.invoke` com contrato tipado (`docs/api.md`).
 - **Fronteiras validadas**: ids de registro na IPC precisam de UUID e passam
-  por `assertSafeEntryId` (rejeita `/`, `\` e `\0` — defesa em profundidade
+  por `assertSafeEntryId` (rejeita `/`, `\` e `\0`; defesa em profundidade
   inspirada no CVE-2026-21589); navegação externa só pelo canal
   `shell:open-domain`, que recusa protocolo fora de `http:`/`https:`.
 - **Auditoria contínua**: `npm run security:audit` (OSV Scanner sobre o
   lockfile, filtro em `.osv-scanner.toml`) roda em todo `npm run check`;
   `npm run lint:shell` varre os scripts de empacotamento; o CodeQL roda no CI
   (push/PR para `main` e semanalmente).
-- **Sem servidor intermediário**: o app não abre conexão de rede alguma — não
+- **Sem servidor intermediário**: o app não abre conexão de rede alguma: não
   há endpoint do Guardinha a atacar; credenciais nunca saem da máquina.
 
 ## Riscos aceitos (com justificativa)
@@ -70,11 +70,11 @@ contrário).
 - **`GUARDINHA_VAULT_DIR` / `GUARDINHA_VAR_LIB`**: variáveis de ambiente
   redirecionam o cofre (usadas por testes e `npm run dev`). Quem controla o
   ambiente do processo do usuário já está no mesmo nível de ameaça que a chave
-  em memória — sem ganho adicional para um atacante local.
+  em memória, sem ganho adicional para um atacante local.
 - **Dependências sem fix upstream**: problemas em dependências sem versão
   corrigida publicada são documentados com data de revisão em
   `.osv-scanner.toml` e voltam a aparecer no `security:audit` quando a data
-  passa — monitorados a cada `npm run check`.
+  passa, monitorados a cada `npm run check`.
 
 ## Fora de escopo
 

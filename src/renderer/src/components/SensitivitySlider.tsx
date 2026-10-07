@@ -14,11 +14,10 @@ interface SensitivitySliderProps {
 }
 
 /**
- * Reduz a sensibilidade do arraste: o mouse precisa percorrer ~3× mais espaço
- * para mudar 1 caractere, e o clique só inicia um arraste relativo (não pula o
- * cursor para o ponto clicado). Teclado move 1 por seta e 10 por Page.
+ * O clique inicia um arraste relativo (não pula o cursor para o ponto
+ * clicado) e o passo em pixels acompanha a faixa de valores, com piso de
+ * 10 px. Teclado move 1 por seta e 10 por Page.
  */
-const SENSITIVITY = 3;
 const MIN_STEP_PX = 10;
 
 const KEY_DELTAS: Record<string, number> = {
@@ -43,7 +42,7 @@ export function SensitivitySlider({
   const stepPx = useCallback((): number => {
     const width = trackRef.current?.clientWidth ?? 480;
     const natural = width / Math.max(1, max - min);
-    return Math.max(MIN_STEP_PX, natural * SENSITIVITY);
+    return Math.max(MIN_STEP_PX, natural);
   }, [max, min]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {

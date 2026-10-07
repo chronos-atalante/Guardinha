@@ -43,7 +43,7 @@ git (ver `AGENTS.md`, seção Comandos).
   `unknown` + validação nas fronteiras (JSON, IPC).
 - **Arquivos com ~500 linhas devem ser quebrados** em módulos/componentes.
 - Textos de UI e mensagens de erro **só em `src/messages/`** (pt-BR é o
-  canônico; `en.ts` fecha com o tipo `Messages`) — ver `docs/messages.md`.
+  canônico; `en.ts` fecha com o tipo `Messages`); ver `docs/messages.md`.
 - Rode `node --import ./src/node.loader.ts <arquivo.ts>` para executar um `.ts`
   direto no Node com os aliases resolvidos.
 
@@ -123,7 +123,7 @@ Para publicar uma versão (a partir da `main`):
    (nada a publicar).
 
 Para reanexar os assets de uma Release que falhou no meio, rode o workflow na
-UI (**Run workflow**, `workflow_dispatch`) — ele publica de novo sem conferir
+UI (**Run workflow**, `workflow_dispatch`), pois ele publica de novo sem conferir
 a versão. Também dá para empurrar a tag à mão
 (`git tag vX.Y.Z && git push origin vX.Y.Z`), que dispara o mesmo workflow.
 

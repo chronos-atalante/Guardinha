@@ -4,12 +4,25 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [1.0.2] - 2026-10-07
+
+### Alterado
+
+- Slider do gerador voltou à sensibilidade normal do mouse: o arraste
+  acompanha o cursor (o teclado continua com setas e Page Up/Page Down).
+- Seletor de idioma na Sidebar virou duas pílulas (pt/en) no lugar do
+  `<select>`, no mesmo estilo dos retângulos de status, categoria e tipo do
+  chronos-biblioteca.
+- Pontuação em português sem travessões: textos da interface, comentários e
+  documentação usam vírgula, dois-pontos e ponto e vírgula no lugar do
+  travessão tipográfico.
+
 ## [1.0.1] - 2026-10-07
 
 ### Alterado
 
 - Ferramenta de build atualizada: vite 8 (rolldown) e electron-vite
-  6.0.0-beta.6 — build mais rápido e bundle do renderer menor, sem mudança
+  6.0.0-beta.6, com build mais rápido e bundle do renderer menor, sem mudança
   de comportamento do app.
 
 ### Corrigido
@@ -31,7 +44,7 @@ Primeira versão pública do **Guardinha** (pacote `.deb` para Linux Mint 22.X).
 - Acesso em camadas: login só com **PIN**; a senha mestra só é oferecida após
   3 falhas de PIN; a frase de recuperação (mínimo de 12 palavras, escrita pelo
   próprio usuário, o app nunca gera) serve exclusivamente para redefinir o
-  PIN — nunca é forma de login.
+  PIN; nunca é forma de login.
 - Trava exponencial (10 s → 30 s → 1 min → 1 h → 24 h) persistida em disco e
   auto-lock após 5 minutos ocioso.
 - Criptografia: Argon2id (64 MB, t=3, p=4) embrulhando as chaves em `vault.zkv`
@@ -65,7 +78,7 @@ Primeira versão pública do **Guardinha** (pacote `.deb` para Linux Mint 22.X).
 ### Segurança
 
 - Renderer com CSP estrita, preload sandboxed (`contextIsolation: true`,
-  `sandbox: true`), sem `innerHTML` dinâmico e sem acesso a disco ou rede —
+  `sandbox: true`), sem `innerHTML` dinâmico e sem acesso a disco ou rede,
   tudo via IPC tipado (`docs/api.md`).
 - Chave do cofre só na memória do processo main; zerada no lock e no
   auto-lock; nenhuma senha, PIN ou frase em log ou eco de erro.

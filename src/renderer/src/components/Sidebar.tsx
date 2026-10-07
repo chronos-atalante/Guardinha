@@ -62,21 +62,24 @@ export function Sidebar({
         </nav>
 
         <div className="px-2 space-y-1.5">
-          <label className="text-xs text-slate-500" htmlFor="guardinha-language">
-            {m.app.languageLabel}
-          </label>
-          <select
-            id="guardinha-language"
-            value={language}
-            onChange={(e) => onLanguageChange(e.target.value as Language)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:border-emerald-500 outline-none cursor-pointer"
-          >
+          <span className="text-xs text-slate-500">{m.app.languageLabel}</span>
+          <div className="flex gap-2" role="group" aria-label={m.app.languageLabel}>
             {LANGUAGES.map((code) => (
-              <option key={code} value={code}>
+              <button
+                key={code}
+                type="button"
+                aria-pressed={language === code}
+                onClick={() => onLanguageChange(code)}
+                className={`flex-1 px-2.5 py-1.5 rounded-full text-xs border cursor-pointer transition-colors ${
+                  language === code
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-semibold'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
                 {LANGUAGE_LABELS[code]}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         <button

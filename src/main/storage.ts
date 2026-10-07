@@ -23,7 +23,7 @@ function xdgDir(envVar: string, fallback: string): string {
 }
 
 /**
- * Raiz do cofre: `/var/lib/.guardinha/.vault` — pastas ocultas por padrão
+ * Raiz do cofre: `/var/lib/.guardinha/.vault`, pastas ocultas por padrão
  * (fora de `~/`, sobrevive à limpeza da pasta do usuário). `GUARDINHA_VAR_LIB`
  * redireciona a raiz e `GUARDINHA_VAULT_DIR` sobrepõe o caminho completo (testes/dev).
  */

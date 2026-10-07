@@ -34,9 +34,9 @@ Contrato único entre renderer e main. Definido em `src/types/api.ts`
 
 ## `window.api.generator`
 
-| Método              | Canal                | Payload → retorno           | Descrição                                          |
-| ------------------- | -------------------- | --------------------------- | -------------------------------------------------- |
-| `generate(options)` | `generator:generate` | `GeneratorOptions → string` | Senha de 0–72 caracteres com os 5 gostos pessoais. |
+| Método              | Canal                | Payload → retorno           | Descrição                                            |
+| ------------------- | -------------------- | --------------------------- | ---------------------------------------------------- |
+| `generate(options)` | `generator:generate` | `GeneratorOptions → string` | Senha de 0 a 72 caracteres com os 5 gostos pessoais. |
 
 ## `window.api.settings`
 
@@ -47,10 +47,10 @@ Contrato único entre renderer e main. Definido em `src/types/api.ts`
 
 ## Tipos (`src/types/`)
 
-- `VaultStatus` — `{ exists, locked, attempts, lockUntil, lockRemainingMs }`
-- `CreateVaultInput` — `{ masterPassword, pin, recoveryPhrase }` (senha de 24 chars; PIN de 8 dígitos; frase ≥ 12 palavras escrita pelo usuário)
-- `UnlockInput` — `{ credential, kind: 'master' | 'pin' }`
-- `ResetPinInput` — `{ phrase, newPin }` (frase de recuperação + novo PIN)
-- `Credential` / `CredentialInput` — registro da credencial (senha cifrada por arquivo)
-- `GeneratorOptions` — `{ length, useUpper, useNumbers, useSymbols, customEntropyWords }`
-- `AppSettings` — `{ language }`
+- `VaultStatus`: `{ exists, locked, attempts, lockUntil, lockRemainingMs }`
+- `CreateVaultInput`: `{ masterPassword, pin, recoveryPhrase }` (senha de 24 chars; PIN de 8 dígitos; frase ≥ 12 palavras escrita pelo usuário)
+- `UnlockInput`: `{ credential, kind: 'master' | 'pin' }`
+- `ResetPinInput`: `{ phrase, newPin }` (frase de recuperação + novo PIN)
+- `Credential` / `CredentialInput`: registro da credencial (senha cifrada por arquivo)
+- `GeneratorOptions`: `{ length, useUpper, useNumbers, useSymbols, customEntropyWords }`
+- `AppSettings`: `{ language }`

@@ -36,7 +36,7 @@ Camadas:
   `.entries/<uuid>.zke` individuais; a raiz `.guardinha/` é
   `root:root 0711` sem listagem (navegar/excluir o topo exige sudo) e, quando
   falta permissão, `createVault` chama o helper do pacote via `pkexec`
-  (ação PolicyKit `com.guardinha.keypass.setup-vault`; diálogo do sistema — a
+  (ação PolicyKit `com.guardinha.keypass.setup-vault`; diálogo do sistema: a
   senha nunca passa pelo app). Migração automática do intermediário
   `$XDG_DATA_HOME/guardinha/` e do legado `~/.guardinha-vault/` (JSON); raiz
   sobrepõe com `GUARDINHA_VAR_LIB`, caminho completo com `GUARDINHA_VAULT_DIR`

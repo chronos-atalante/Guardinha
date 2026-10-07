@@ -145,8 +145,8 @@ export const ptBR = {
   },
 
   attributions: {
-    title: '— ATRIBUIÇÕES —',
-    footer: '© 2026 - Proteção de Dados 100% Offline & Local',
+    title: 'ATRIBUIÇÕES',
+    footer: '© 2026, Proteção de Dados 100% Offline & Local',
     loopHint: 'Os créditos voltam ao início em loop.',
   },
 

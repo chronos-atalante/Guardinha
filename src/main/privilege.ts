@@ -10,7 +10,7 @@ function hasVaultOverride(): boolean {
 
 /**
  * Pede autenticação de administrador para criar/reparar a estrutura de
- * `/var/lib/.guardinha` via `pkexec` — a caixinha de senha é a do próprio
+ * `/var/lib/.guardinha` via `pkexec`: a caixinha de senha é a do próprio
  * sistema (PolicyKit/Mint); o app nunca vê a senha. O alvo é o helper
  * `guardinha-setup` do pacote, que só cria diretórios fixos.
  *

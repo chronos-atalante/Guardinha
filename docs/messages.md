@@ -9,7 +9,7 @@ persistido em `settings.json` (`AppSettings.language`).
 
 - `src/messages/pt-BR.ts` é o **canônico**: exporta `ptBR` e
   `export type Messages = typeof ptBR`. Toda chave e assinatura nasce aqui.
-- `src/messages/en.ts` exporta `en: Messages` — o TypeScript aponta qualquer
+- `src/messages/en.ts` exporta `en: Messages`; o TypeScript aponta qualquer
   chave ou parâmetro faltando (ou sobrando) na tradução.
 - `src/messages/index.ts` é o barrel: `LANGUAGES` (`'pt-BR' | 'en'`),
   `LANGUAGE_LABELS` (nome nativo do idioma, que **não** se traduz),
@@ -19,7 +19,7 @@ Regras das strings:
 
 - Strings com parâmetro são **funções** (`lockout: (time: string) => ...`).
 - Marcadores ricos, usados **só na UI**: `**negrito**` vira `<strong>` e
-  `` `código` `` vira `<code>` — renderize com `richText()` (em
+  `` `código` `` vira `<code>`; renderize com `richText()` (em
   `src/renderer/src/i18n.tsx`), que monta nós React sem `dangerouslySetInnerHTML`.
 - Elipses são `…` (U+2026), não `...`.
 
@@ -30,8 +30,8 @@ Regras das strings:
 | Renderer | Contexto React em `src/renderer/src/i18n.tsx`: `MessagesProvider` (montado pelo `App`), hooks `useMessages()` / `useLanguage()` e `richText()`. Fora do provider o padrão é `pt-BR`. |
 | Main     | `currentMessages()` (`src/main/i18n.ts`) lê `loadSettings().language` a cada chamada e devolve o bundle; os erros IPC saem já no idioma vigente.                                     |
 
-`App` lê `settings.get()` na carga e troca o provider ao trocar o idioma no
-`<select>` da Sidebar (`settings.set`).
+`App` lê `settings.get()` na carga e troca o provider ao trocar o idioma na
+Sidebar (`settings.set`).
 
 ## O que NÃO se traduz
 
@@ -45,7 +45,7 @@ Regras das strings:
 ## Adicionando uma string
 
 1. Crie a chave em `src/messages/pt-BR.ts` (com parâmetro, se variar).
-2. Traduza em `src/messages/en.ts` — o typecheck reclama se faltar.
+2. Traduza em `src/messages/en.ts`; o typecheck reclama se faltar.
 3. Use via `useMessages()` (renderer) ou `currentMessages()` (main).
 4. `npm run check` + `npm test` (o teste `tests/messages/parity.test.ts`
    confere paridade de chaves e aridade).

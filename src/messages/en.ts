@@ -141,8 +141,8 @@ export const en: Messages = {
   },
 
   attributions: {
-    title: '— ATTRIBUTIONS —',
-    footer: '© 2026 - 100% Offline & Local Data Protection',
+    title: 'ATTRIBUTIONS',
+    footer: '© 2026, 100% Offline & Local Data Protection',
     loopHint: 'The credits loop back to the start.',
   },
 
