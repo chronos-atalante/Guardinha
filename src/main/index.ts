@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { Menu, app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { Menu, app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
 import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
 import { validateDomainFormat } from '@zero/main/auth';
 import { removeEntry, saveEntry, listEntries } from '@zero/main/entries';
@@ -59,10 +58,7 @@ function createWindow(): void {
   // O app é uma SPA local: navegação só vale para a própria página (o reload
   // mantém a mesma URL); qualquer salto para outra URL é recusado.
   const devUrl = process.env.ELECTRON_RENDERER_URL;
-  const targetUrl =
-    devUrl !== undefined && devUrl !== ''
-      ? devUrl
-      : pathToFileURL(path.join(__dirname, '../renderer/index.html')).toString();
+  const targetUrl = devUrl !== undefined && devUrl !== '' ? devUrl : `${APP_ORIGIN}/index.html`;
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url !== targetUrl) event.preventDefault();
   });
@@ -95,15 +91,137 @@ function registerPermissionPolicy(): void {
   });
 }
 
+const APP_SCHEME = 'guardinha';
+const APP_ORIGIN = `${APP_SCHEME}://app`;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    // Serve a SPA em produção via protocol.handle (substitui file://).
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
+
+function rendererMime(file: string): string {
+  switch (path.extname(file).toLowerCase()) {
+    case '.html':
+      return 'text/html; charset=utf-8';
+    case '.js':
+    case '.mjs':
+      return 'text/javascript; charset=utf-8';
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.json':
+    case '.map':
+      return 'application/json; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.ico':
+      return 'image/x-icon';
+    case '.woff':
+      return 'font/woff';
+    case '.woff2':
+      return 'font/woff2';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/**
+ * Serve a SPA empacotada sob o scheme `guardinha://` (em vez de `file://`,
+ * recomendado pela doc atual do Electron): todo `/assets/...` resolve dentro
+ * de `out/renderer`, com path traversal rejeitado por `path.resolve` + prefix.
+ */
+function registerAppProtocol(): void {
+  const root = path.join(__dirname, '../renderer');
+  protocol.handle(APP_SCHEME, (request) => {
+    try {
+      const u = new URL(request.url);
+      const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
+      const full = path.resolve(root, rel === '' ? 'index.html' : rel);
+      if (!full.startsWith(`${root}${path.sep}`)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) {
+        return new Response('Não encontrado.', { status: 404 });
+      }
+      return new Response(new Uint8Array(fs.readFileSync(full)), {
+        headers: { 'Content-Type': rendererMime(full) },
+      });
+    } catch {
+      return new Response('Erro', { status: 500 });
+    }
+  });
+}
+
+/**
+ * Só aceita URL da página oficial do app: dev server do Vite em dev, ou o
+ * scheme `guardinha://` em produção. Qualquer frame fora desse host (ex.: um
+ * `<webview>` injetado) é bloqueado antes do handler de domínio rodar.
+ */
+function isAppFrameUrl(url: string | undefined): boolean {
+  if (url === undefined) return false;
+  const devUrl = process.env.ELECTRON_RENDERER_URL;
+  const base = devUrl !== undefined && devUrl !== '' ? devUrl : `${APP_ORIGIN}/index.html`;
+  try {
+    const frame = new URL(url);
+    const expected = new URL(base);
+    return (
+      frame.protocol === expected.protocol &&
+      frame.host === expected.host &&
+      frame.port === expected.port
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Recusa IPC cujo emissor não é a página oficial do app (scheme `guardinha://`
+ * em produção ou dev server do Vite em dev). Requer `event.senderFrame`.
+ */
+function assertAppFrame(event: unknown): void {
+  const sf = (event as { senderFrame?: { url?: unknown } | null } | null | undefined)?.senderFrame;
+  const url = sf?.url;
+  if (!isAppFrameUrl(typeof url === 'string' ? url : undefined)) {
+    throw new Error('IPC bloqueado: frame fora da página oficial do app.');
+  }
+}
+
 function registerIpc(): void {
-  ipcMain.handle('vault:status', () => getStatus());
-  ipcMain.handle('vault:create', (_event, input: CreateVaultInput) => createVault(input));
-  ipcMain.handle('vault:unlock', (_event, input: UnlockInput) => unlock(input));
-  ipcMain.handle('vault:resetPin', (_event, input: ResetPinInput) => resetPin(input));
-  ipcMain.handle('vault:lock', () => lock());
+  ipcMain.handle('vault:status', (event) => {
+    assertAppFrame(event);
+    return getStatus();
+  });
+  ipcMain.handle('vault:create', (event, input: CreateVaultInput) => {
+    assertAppFrame(event);
+    return createVault(input);
+  });
+  ipcMain.handle('vault:unlock', (event, input: UnlockInput) => {
+    assertAppFrame(event);
+    return unlock(input);
+  });
+  ipcMain.handle('vault:resetPin', (event, input: ResetPinInput) => {
+    assertAppFrame(event);
+    return resetPin(input);
+  });
+  ipcMain.handle('vault:lock', (event) => {
+    assertAppFrame(event);
+    return lock();
+  });
 
   /** Abre o domínio da credencial no navegador padrão (só http/https). */
-  ipcMain.handle('shell:open-domain', (_event, domain: string) => {
+  ipcMain.handle('shell:open-domain', (event, domain: string) => {
+    assertAppFrame(event);
     const m = currentMessages();
     if (domain === '' || !validateDomainFormat(domain)) {
       throw new Error(m.errors.invalidDomain);
@@ -112,11 +230,21 @@ function registerIpc(): void {
     void shell.openExternal(url);
   });
 
-  ipcMain.handle('entries:list', () => listEntries());
-  ipcMain.handle('entries:save', (_event, entry: CredentialInput) => saveEntry(entry));
-  ipcMain.handle('entries:delete', (_event, id: string) => removeEntry(id));
+  ipcMain.handle('entries:list', (event) => {
+    assertAppFrame(event);
+    return listEntries();
+  });
+  ipcMain.handle('entries:save', (event, entry: CredentialInput) => {
+    assertAppFrame(event);
+    return saveEntry(entry);
+  });
+  ipcMain.handle('entries:delete', (event, id: string) => {
+    assertAppFrame(event);
+    return removeEntry(id);
+  });
 
-  ipcMain.handle('generator:generate', (_event, options: GeneratorOptions) => {
+  ipcMain.handle('generator:generate', (event, options: GeneratorOptions) => {
+    assertAppFrame(event);
     const m = currentMessages();
     const length = options.length;
     if (!Number.isInteger(length) || length < 0 || length > 72) {
@@ -134,8 +262,14 @@ function registerIpc(): void {
     );
   });
 
-  ipcMain.handle('settings:get', () => loadSettings());
-  ipcMain.handle('settings:set', (_event, settings: AppSettings) => saveSettings(settings));
+  ipcMain.handle('settings:get', (event) => {
+    assertAppFrame(event);
+    return loadSettings();
+  });
+  ipcMain.handle('settings:set', (event, settings: AppSettings) => {
+    assertAppFrame(event);
+    return saveSettings(settings);
+  });
 }
 
 /** Sem barra de menus (sem File/Edit/View): o menu da aplicação é removido. */
@@ -158,6 +292,7 @@ if (!gotLock) {
   app
     .whenReady()
     .then(() => {
+      registerAppProtocol();
       registerIpc();
       removeApplicationMenu();
       registerPermissionPolicy();

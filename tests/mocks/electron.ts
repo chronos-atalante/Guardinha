@@ -60,7 +60,13 @@ export const Menu = {
 
 export const ipcMain = {
   handle: vi.fn<(channel: string, listener: IpcHandler) => void>(),
+  on: vi.fn<(channel: string, listener: IpcHandler) => void>(),
   removeHandler: vi.fn<(channel: string) => void>(),
+};
+
+export const protocol = {
+  registerSchemesAsPrivileged: vi.fn<(schemes: unknown[]) => void>(),
+  handle: vi.fn<(scheme: string, handler: (request: unknown) => Response) => void>(),
 };
 
 export const ipcRenderer = {
@@ -103,6 +109,8 @@ export function resetElectronMock(): void {
   app.whenReady.mockClear();
   Menu.setApplicationMenu.mockClear();
   ipcMain.handle.mockClear();
+  protocol.registerSchemesAsPrivileged.mockClear();
+  protocol.handle.mockClear();
   ipcRenderer.invoke.mockClear();
   ipcRenderer.on.mockClear();
   ipcRenderer.removeListener.mockClear();

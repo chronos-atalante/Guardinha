@@ -61,6 +61,16 @@ contrário).
   menos o clipboard (necessário para copiar credenciais), DevTools está
   desligado no app empacotado e o conteúdo copiado expira sozinho do clipboard
   após 30 s (salvo cópia posterior do usuário).
+- **IPC fechado por origem**: todo handler confere `event.senderFrame` contra a
+  página oficial do app (scheme `guardinha://` em produção ou dev server do
+  Vite), bloqueando a mensagem antes do domínio tocar.
+- **Sem `file://` em produção**: o renderer é servido por `guardinha://`
+  (handler em `protocol.handle` com path-traversal rejeitado), e o
+  `grantFileProtocolExtraPrivileges` está desligado via fuse.
+- **Fuses do Electron**: `runAsNode: false`, `NODE_OPTIONS` e inspetor de
+  `--inspect` desligados, `enableCookieEncryption: true`,
+  `onlyLoadAppFromAsar: true`
+  no `electron-builder`.
 - **Auditoria contínua**: `npm run security:audit` (OSV Scanner sobre o
   lockfile, filtro em `.osv-scanner.toml`) roda em todo `npm run check`;
   `npm run lint:shell` varre os scripts de empacotamento; o CodeQL roda no CI

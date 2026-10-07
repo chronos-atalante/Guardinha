@@ -17,6 +17,18 @@ em português do Brasil.
   clipboard 30 s depois, salvo o usuário já ter copiado outra coisa antes
   (`src/renderer/src/clipboard.ts`).
 - produção: DevTools desligado no app empacotado (`devTools: !app.isPackaged`).
+- IPC pelo frame oficial: todo handler chegou com `assertAppFrame(event)`, que
+  confere `event.senderFrame` contra a página do scheme `guardinha://` (ou o
+  Vite dev server), bloqueando qualquer frame de fora antes do domínio.
+- renderer entregue via scheme `guardinha://` em produção
+  (`registerAppProtocol` serve `out/renderer`), em vez de `file://`; CSP com
+  `object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action
+'self'`.
+- `electronFuses` no electron-builder: `runAsNode: false`,
+  `enableNodeOptionsEnvironmentVariable: false`,
+  `enableNodeCliInspectArguments: false`, `enableCookieEncryption: true`,
+  `onlyLoadAppFromAsar: true` e
+  `grantFileProtocolExtraPrivileges: false`.
 
 ## [1.0.3] - 2026-10-07
 
