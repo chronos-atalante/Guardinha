@@ -1,11 +1,13 @@
 // @vitest-environment node
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { resetAttempts } from '@zero/main/auth';
 import { currentMessages } from '@zero/main/i18n';
 import { listEntries, removeEntry, saveEntry } from '@zero/main/entries';
 import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
 
-const MASTER = 'senha-mestra-de-zena-24c';
+const MASTER = 'senha-mestra-guardinha24';
 const PIN = '49201733';
 const NEW_PIN = '87654321';
 /** Frase de 12 palavras escrita pelo usuário (o app não gera frase alguma). */
@@ -136,6 +138,7 @@ describe('ciclo de vida do cofre (integração)', () => {
       saveEntry({ title: 'X', username: '', password: '', domain: 'não é domínio', notes: '' }),
     ).toThrow(currentMessages().errors.invalidDomain);
     expect(() => removeEntry('id-falso')).toThrow(currentMessages().errors.invalidId);
+    expect(() => removeEntry('../../vault.zkv')).toThrow(currentMessages().errors.invalidId);
 
     lock();
     expect(() => listEntries()).toThrow(currentMessages().errors.vaultLocked);
@@ -176,5 +179,34 @@ describe('ciclo de vida do cofre (integração)', () => {
     const newPin = await unlock({ credential: NEW_PIN, kind: 'pin' });
     expect(newPin.ok).toBe(true);
     vi.useRealTimers();
+  });
+
+  it('9. detecta arquivo injetado ou removido de fora do app (manifesto)', () => {
+    expect(getStatus().locked).toBe(false);
+    const tampered = currentMessages().errors.vaultTampered;
+    const entriesDir = path.join(process.env.GUARDINHA_VAULT_DIR ?? '', '.entries');
+
+    const created = saveEntry({
+      title: 'Site',
+      username: 'user',
+      password: 'pass',
+      domain: 'example.com',
+      notes: '',
+    });
+    const id = created[0]?.id ?? '';
+    expect(id).not.toBe('');
+
+    // arquivo injetado fora do app → manifesto não conhece
+    const stray = path.join(entriesDir, 'ffffffff-ffff-4fff-8fff-ffffffffffff.zke');
+    fs.writeFileSync(stray, Buffer.alloc(64));
+    expect(() => listEntries()).toThrow(tampered);
+    fs.rmSync(stray);
+
+    // de volta ao normal depois de remover o intruso
+    expect(listEntries()).toHaveLength(1);
+
+    // remoção externa do arquivo da credencial → manifesto acusa
+    fs.rmSync(path.join(entriesDir, `${id}.zke`));
+    expect(() => listEntries()).toThrow(tampered);
   });
 });

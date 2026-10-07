@@ -17,12 +17,17 @@ import {
 import {
   createVaultKey,
   ensureVaultStructure,
-  readEnvelope,
+  initManifest,
+  isVaultDirUnavailable,
+  readVaultContainer,
   vaultExists,
-  writeEnvelope,
+  writeVaultContainer,
 } from '@zero/main/storage';
+import { setupVaultDirectory } from '@zero/main/privilege';
+import { sealManifest } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
-import type { PersistedAuthState, UnlockMethod, VaultEnvelope } from '@zero/main/storage';
+import type { VaultContainerData, WrappedMethod } from '@zero/main/container';
+import type { PersistedAuthState } from '@zero/main/storage';
 import type {
   CreateVaultInput,
   ResetPinInput,
@@ -105,12 +110,12 @@ function fail(error: string): VaultResult {
   return { ok: false, error, status: getStatus() };
 }
 
-async function wrapKey(vaultKey: Buffer, credential: string): Promise<UnlockMethod> {
-  const salt = randomBytes(16);
-  const derived = await deriveKey(credential, salt);
-  const wrapped = encryptRecord({ key: vaultKey.toString('hex') }, derived);
+async function wrapKey(vaultKey: Buffer, credential: string): Promise<WrappedMethod> {
+  const kdfSalt = randomBytes(16);
+  const derived = await deriveKey(credential, kdfSalt);
+  const payload = encryptRecord({ key: vaultKey.toString('hex') }, derived);
   derived.fill(0);
-  return { salt: salt.toString('hex'), wrapped };
+  return { kdfSalt: kdfSalt.toString('hex'), payload };
 }
 
 /** Cria o cofre com frase de recuperação escrita pelo próprio usuário. */
@@ -128,23 +133,43 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
   }
   if (vaultExists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
 
-  ensureVaultStructure();
+  try {
+    ensureVaultStructure();
+  } catch (error) {
+    if (!isVaultDirUnavailable(error)) {
+      const message = error instanceof Error ? error.message : m.errors.internal;
+      return { ok: false, error: message, status: getStatus() };
+    }
+    // sem permissão em /var/lib: abre o diálogo do sistema (pkexec) e tenta de novo
+    if (!setupVaultDirectory()) {
+      return { ok: false, error: m.errors.vaultAuthCancelled, status: getStatus() };
+    }
+    try {
+      ensureVaultStructure();
+    } catch (retryError) {
+      const message = retryError instanceof Error ? retryError.message : m.errors.internal;
+      return { ok: false, error: message, status: getStatus() };
+    }
+    // a raiz agora existe: refaz a checagem (migra cofre antigo, se houver)
+    if (vaultExists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
+  }
   const vaultKey = createVaultKey();
 
-  const methods: VaultEnvelope['methods'] = {
+  const methods: VaultContainerData['methods'] = {
     master: await wrapKey(vaultKey, input.masterPassword),
     pin: await wrapKey(vaultKey, input.pin),
     recovery: await wrapKey(vaultKey, recoveryPhrase),
   };
 
-  const envelope: VaultEnvelope = {
-    version: 1,
+  const container: VaultContainerData = {
     createdAt: Date.now(),
     kdf: KDF_PARAMS,
+    attempts: 0,
+    lockUntil: null,
     methods,
+    manifest: sealManifest(vaultKey, []),
   };
-  writeEnvelope(envelope);
-  resetAttempts();
+  writeVaultContainer(container);
 
   sessionKey = vaultKey;
   touch();
@@ -161,15 +186,15 @@ function wrongCredentialError(kind: UnlockKind): string {
 /** Desbloqueia o cofre com senha mestra ou PIN. */
 export async function unlock(input: UnlockInput): Promise<VaultResult> {
   const m = currentMessages();
-  const envelope = readEnvelope();
-  if (envelope === null) return fail(m.errors.vaultMissing);
+  const container = readVaultContainer();
+  if (container === null) return fail(m.errors.vaultMissing);
 
   const locked = getLockRemainingMs(loadAuthState());
   if (locked > 0) {
     return fail(m.auth.lockout(formatCountdown(locked)));
   }
 
-  const method = envelope.methods[input.kind];
+  const method = container.methods[input.kind];
   const wrong = wrongCredentialError(input.kind);
   if (method === undefined) {
     registerFailedAttempt();
@@ -177,15 +202,16 @@ export async function unlock(input: UnlockInput): Promise<VaultResult> {
   }
 
   try {
-    const derived = await deriveKey(input.credential, Buffer.from(method.salt, 'hex'));
-    const unwrapped = decryptRecord(method.wrapped, derived);
+    const derived = await deriveKey(input.credential, Buffer.from(method.kdfSalt, 'hex'));
+    const unwrapped = decryptRecord(method.payload, derived);
     derived.fill(0);
     if (!('key' in unwrapped) || typeof unwrapped.key !== 'string' || unwrapped.key.length !== 64) {
-      throw new Error('envelope corrompido');
+      throw new Error('container corrompido');
     }
 
     lock();
     sessionKey = Buffer.from(unwrapped.key, 'hex');
+    initManifest(sessionKey);
     resetAttempts();
     touch();
     return { ok: true, status: getStatus() };
@@ -201,8 +227,8 @@ export async function unlock(input: UnlockInput): Promise<VaultResult> {
  */
 export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
   const m = currentMessages();
-  const envelope = readEnvelope();
-  if (envelope === null) return fail(m.errors.vaultMissing);
+  const container = readVaultContainer();
+  if (container === null) return fail(m.errors.vaultMissing);
 
   const locked = getLockRemainingMs(loadAuthState());
   if (locked > 0) {
@@ -210,25 +236,26 @@ export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
   }
   if (!validatePinFormat(input.newPin)) return fail(m.errors.invalidPin);
 
-  const method = envelope.methods.recovery;
+  const method = container.methods.recovery;
   if (method === undefined) return fail(m.errors.wrongRecovery);
 
   try {
     const phrase = normalizeRecoveryPhrase(input.phrase);
     if (phrase.split(' ').length < RECOVERY_MIN_WORDS) throw new Error('frase curta');
-    const derived = await deriveKey(phrase, Buffer.from(method.salt, 'hex'));
-    const unwrapped = decryptRecord(method.wrapped, derived);
+    const derived = await deriveKey(phrase, Buffer.from(method.kdfSalt, 'hex'));
+    const unwrapped = decryptRecord(method.payload, derived);
     derived.fill(0);
     if (!('key' in unwrapped) || typeof unwrapped.key !== 'string' || unwrapped.key.length !== 64) {
-      throw new Error('envelope corrompido');
+      throw new Error('container corrompido');
     }
 
     const vaultKey = Buffer.from(unwrapped.key, 'hex');
-    envelope.methods.pin = await wrapKey(vaultKey, input.newPin);
-    writeEnvelope(envelope);
+    container.methods.pin = await wrapKey(vaultKey, input.newPin);
+    writeVaultContainer(container);
 
     lock();
     sessionKey = vaultKey;
+    initManifest(sessionKey);
     resetAttempts();
     touch();
     return { ok: true, status: getStatus() };

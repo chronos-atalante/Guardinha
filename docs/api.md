@@ -10,13 +10,13 @@ Contrato único entre renderer e main. Definido em `src/types/api.ts`
 
 ## `window.api.vault`
 
-| Método            | Canal            | Payload → retorno                | Descrição                                                                                      |
-| ----------------- | ---------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `status()`        | `vault:status`   | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                |
-| `create(input)`   | `vault:create`   | `CreateVaultInput → VaultResult` | Cria `~/.zena-vault/` com frase de recuperação **escrita pelo usuário** (≥ 12 palavras).       |
-| `unlock(input)`   | `vault:unlock`   | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN. |
-| `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).        |
-| `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                            |
+| Método            | Canal            | Payload → retorno                | Descrição                                                                                         |
+| ----------------- | ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `status()`        | `vault:status`   | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                   |
+| `create(input)`   | `vault:create`   | `CreateVaultInput → VaultResult` | Cria o cofre em `/var/lib/.guardinha/.vault/` com frase **escrita pelo usuário** (≥ 12 palavras). |
+| `unlock(input)`   | `vault:unlock`   | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN.    |
+| `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).           |
+| `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                               |
 
 ## `window.api.openDomain`
 
@@ -40,10 +40,10 @@ Contrato único entre renderer e main. Definido em `src/types/api.ts`
 
 ## `window.api.settings`
 
-| Método          | Canal          | Payload → retorno           | Descrição                                                    |
-| --------------- | -------------- | --------------------------- | ------------------------------------------------------------ |
-| `get()`         | `settings:get` | `→ AppSettings`             | `language` (`'pt-BR' \| `'en'`), default `pt-BR`.            |
-| `set(settings)` | `settings:set` | `AppSettings → AppSettings` | Normaliza e grava em `~/.config/zena-keypass/settings.json`. |
+| Método          | Canal          | Payload → retorno           | Descrição                                                        |
+| --------------- | -------------- | --------------------------- | ---------------------------------------------------------------- |
+| `get()`         | `settings:get` | `→ AppSettings`             | `language` (`'pt-BR' \| `'en'`), default `pt-BR`.                |
+| `set(settings)` | `settings:set` | `AppSettings → AppSettings` | Normaliza e grava em `$XDG_CONFIG_HOME/guardinha/settings.json`. |
 
 ## Tipos (`src/types/`)
 

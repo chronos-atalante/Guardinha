@@ -62,11 +62,11 @@ export function Sidebar({
         </nav>
 
         <div className="px-2 space-y-1.5">
-          <label className="text-xs text-slate-500" htmlFor="zena-language">
+          <label className="text-xs text-slate-500" htmlFor="guardinha-language">
             {m.app.languageLabel}
           </label>
           <select
-            id="zena-language"
+            id="guardinha-language"
             value={language}
             onChange={(e) => onLanguageChange(e.target.value as Language)}
             className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:border-emerald-500 outline-none cursor-pointer"

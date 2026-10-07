@@ -1,4 +1,4 @@
-# AGENTS.md: ZenaKeyPass
+# AGENTS.md: Guardinha
 
 Diretrizes para agentes e contribuidores deste repositório. Este arquivo manda
 no código daqui. Referências humanas: `README.md` (visão completa).
@@ -13,8 +13,8 @@ Camadas:
 
 - `src/main/`: janela e IPC (`index.ts`), cofre e sessão (`vault.ts`), CRUD de
   credenciais (`entries.ts`), criptografia (`crypto.ts`), persistência
-  (`storage.ts`), trava exponencial (`auth.ts`) e idioma (`settings.ts`,
-  `i18n.ts`).
+  (`storage.ts`), trava exponencial (`auth.ts`), sudo via PolicyKit
+  (`privilege.ts`) e idioma (`settings.ts`, `i18n.ts`).
 - `src/messages/`: textos do app em pt-BR (canônico) e en (`@zero/messages`);
   guia em `docs/messages.md`.
 - `src/preload/`: única ponte da UI; monta e expõe `window.api` tipado.
@@ -29,9 +29,19 @@ Camadas:
   depois de 3 falhas de PIN; a **frase de recuperação** é escrita pelo próprio
   usuário (mínimo de 12 palavras, o app nunca gera) e serve exclusivamente para
   redefinir o PIN (`vault.resetPin`), nunca como login.
-- Persistência: cofre em `~/.zena-vault/` (`envelope.json`, `entries/<uuid>.enc`,
-  `auth-state.json`; override de teste via `ZENA_VAULT_DIR`) e configurações em
-  `~/.config/zena-keypass/settings.json`.
+- Persistência: cofre em `/var/lib/.guardinha/.vault/` (fora de `~/`, 0700;
+  **pastas ocultas por padrão**, prefixo `.`; a raiz é criada pelo `postinst`
+  do `.deb`, `build/scripts/after-install.sh`) com `vault.zkv` binário (chaves
+  embrulhadas + trava exponencial + manifesto cifrado) e
+  `.entries/<uuid>.zke` individuais; a raiz `.guardinha/` é
+  `root:root 0711` sem listagem (navegar/excluir o topo exige sudo) e, quando
+  falta permissão, `createVault` chama o helper do pacote via `pkexec`
+  (ação PolicyKit `com.guardinha.keypass.setup-vault`; diálogo do sistema — a
+  senha nunca passa pelo app). Migração automática do intermediário
+  `$XDG_DATA_HOME/guardinha/` e do legado `~/.guardinha-vault/` (JSON); raiz
+  sobrepõe com `GUARDINHA_VAR_LIB`, caminho completo com `GUARDINHA_VAULT_DIR`
+  (testes; `npm run dev` usa `.dev-vault/`); configurações em
+  `$XDG_CONFIG_HOME/guardinha/settings.json`.
 - IPC via `ipcRenderer.invoke` e `ipcMain.handle`; canal novo só com tipo em
   `src/types/` e entrada em `docs/api.md`.
 - A chave do cofre vive em memória no main (`vault.ts`); é zerada no lock e no
@@ -70,10 +80,16 @@ Camadas:
 
 ## Comandos
 
-- `npm run check`: typecheck + lint + format. Obrigatório antes de concluir
-  qualquer mudança.
+- `npm run check`: typecheck + lint + format + `security:audit` (osv-scanner
+  sobre o lockfile, `.osv-scanner.toml`) + `lint:shell` (shellcheck nos
+  scripts de `build/scripts/`). Obrigatório antes de concluir qualquer
+  mudança. As duas ferramentas ficam em `bin/` e não entram no git:
+  `bin/osv-scanner` (copiar de `Chronos/Biblioteca/bin/`) e `bin/shellcheck`
+  (release `koalaman/shellcheck` no GitHub).
 - `npm test` (ou `test:coverage`): Vitest em `tests/**`.
 - `npm run dev` / `build` / `dist`: desenvolvimento, build, `.deb`.
+- `python3 build/make-icon.py`: regenera `build/icon.png` (PIL); é o `icon`
+  do electron-builder e da janela.
 - `node --import ./src/node.loader.ts <arquivo.ts>`: roda `.ts` direto com os
   aliases `@zero/*`.
 - Capture o exit do próprio npm (`npm run check; echo $?`), não o código de
@@ -86,7 +102,7 @@ Camadas:
 - Renderer com CSP e preload sandboxed (por isso ele é CommonJS); não
   enfraquecer `contextIsolation` nem inserir HTML dinâmico.
 - Argon2id com 64 MB / t=3 / p=4 e AES-256-GCM por arquivo: mudar parâmetros
-  exige migrar o `envelope.json` (versão `1`).
+  exige migrar o `vault.zkv` (versão `2`) e converter entradas legadas.
 - `.deb` e `out/` nunca entram no git.
 
 ## Documentação

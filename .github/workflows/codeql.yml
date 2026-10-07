@@ -1,0 +1,39 @@
+name: CodeQL
+
+# Análise estática de segurança do código (JS/TS) em push/PR para main e
+# semanalmente. Complementa o `npm run security:audit` (OSV, dependências).
+# Ressalva: code scanning é gratuito em repositório público; em privado
+# exige GitHub Advanced Security.
+# Actions fixadas por SHA completo (com a tag na comentário); o Dependabot
+# (`github-actions`) atualiza os pins.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analisar (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: github/codeql-action/init@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
+        with:
+          languages: javascript-typescript
+
+      # Linguagens interpretadas não precisam de build: o analisador
+      # varre o fonte diretamente.
+      - uses: github/codeql-action/analyze@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
+        with:
+          category: '/language:javascript-typescript'

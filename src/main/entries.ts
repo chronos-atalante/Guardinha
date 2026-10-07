@@ -1,6 +1,13 @@
 import { decryptRecord, encryptRecord, randomUuid } from '@zero/main/crypto';
 import { validateDomainFormat, validateUsernameFormat } from '@zero/main/auth';
-import { deleteEntry, listEntryIds, readEntryPayload, writeEntryPayload } from '@zero/main/storage';
+import {
+  deleteEntry,
+  listEntryIds,
+  readEntryPayload,
+  updateManifest,
+  verifyManifest,
+  writeEntryPayload,
+} from '@zero/main/storage';
 import { requireSessionKey, touch } from '@zero/main/vault';
 import { currentMessages } from '@zero/main/i18n';
 import type { Credential, CredentialInput } from '@zero/types';
@@ -34,25 +41,32 @@ function asCredential(value: object): Credential | null {
   };
 }
 
-/** Todas as credenciais decifradas, da mais recente para a mais antiga. */
+/**
+ * Todas as credenciais decifradas, da mais recente para a mais antiga.
+ * Confere o manifesto antes: arquivo removido/injetado de fora do app derruba
+ * a lista com o erro único de adulteração (fail-closed, sem ignorar nada).
+ */
 export function listEntries(): Credential[] {
   const key = requireSessionKey();
+  const m = currentMessages();
+  verifyManifest(key);
   const records: Credential[] = [];
   for (const id of listEntryIds()) {
+    let record: Credential | null;
     try {
-      const record = asCredential(decryptRecord(readEntryPayload(id), key));
-      if (record !== null) records.push(record);
-      else console.error(`Entrada corrompida ignorada: ${id}`);
+      record = asCredential(decryptRecord(readEntryPayload(id), key));
     } catch {
-      console.error(`Entrada ilegível ignorada: ${id}`);
+      throw new Error(m.errors.vaultTampered);
     }
+    if (record === null) throw new Error(m.errors.vaultTampered);
+    records.push(record);
   }
   records.sort((a, b) => b.updatedAt - a.updatedAt);
   touch();
   return records;
 }
 
-/** Valida, cifra e grava a credencial em arquivo próprio (~/.zena-vault/entries/<uuid>.enc). */
+/** Valida, cifra e grava a credencial em arquivo próprio (<uuid>.zke). */
 export function saveEntry(input: CredentialInput): Credential[] {
   const key = requireSessionKey();
   const m = currentMessages();
@@ -76,7 +90,7 @@ export function saveEntry(input: CredentialInput): Credential[] {
     } catch {
       stored = null;
     }
-    if (stored === null) throw new Error(m.errors.internal);
+    if (stored === null) throw new Error(m.errors.vaultTampered);
     id = input.id;
     createdAt = stored.createdAt;
   }
@@ -92,17 +106,19 @@ export function saveEntry(input: CredentialInput): Credential[] {
     updatedAt: now,
   };
   writeEntryPayload(id, encryptRecord(record, key));
+  updateManifest(key);
   touch();
   return listEntries();
 }
 
-/** Remove o arquivo cifrado da credencial. */
+/** Remove o arquivo cifrado da credencial e re-sella o manifesto. */
 export function removeEntry(id: string): Credential[] {
-  requireSessionKey();
+  const key = requireSessionKey();
   const m = currentMessages();
   if (!UUID_PATTERN.test(id)) throw new Error(m.errors.invalidId);
   if (!listEntryIds().includes(id)) throw new Error(m.errors.entryNotFound);
   deleteEntry(id);
+  updateManifest(key);
   touch();
   return listEntries();
 }

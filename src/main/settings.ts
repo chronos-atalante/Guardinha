@@ -4,9 +4,11 @@ import os from 'node:os';
 import { LANGUAGES } from '@zero/messages';
 import type { AppSettings, Language } from '@zero/types';
 
-/** Configurações não sensíveis em XDG (~/.config/zena-keypass/). */
+/** Configurações não sensíveis em XDG ($XDG_CONFIG_HOME/guardinha/). */
 function configDir(): string {
-  return path.join(os.homedir(), '.config', 'zena-keypass');
+  const xdg = process.env.XDG_CONFIG_HOME;
+  const base = xdg !== undefined && xdg !== '' ? xdg : path.join(os.homedir(), '.config');
+  return path.join(base, 'guardinha');
 }
 
 function settingsFile(): string {
@@ -32,7 +34,8 @@ export function loadSettings(): AppSettings {
 
 export function saveSettings(settings: AppSettings): AppSettings {
   const normalized: AppSettings = { language: normalizeLanguage(settings.language) };
-  fs.ensureDirSync(configDir());
+  fs.ensureDirSync(configDir(), { mode: 0o700 });
+  fs.chmodSync(configDir(), 0o700);
   const tmp = `${settingsFile()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(normalized, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, settingsFile());

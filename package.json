@@ -1,10 +1,10 @@
 {
-  "name": "zena-keypass",
-  "productName": "ZenaKey",
+  "name": "guardinha",
+  "productName": "Guardinha",
   "version": "1.0.0",
   "description": "Cofre de credenciais 100% offline para Linux Mint 22.X (Zena)",
   "main": "out/main/index.js",
-  "desktopName": "zena-keypass.desktop",
+  "desktopName": "guardinha.desktop",
   "type": "module",
   "keywords": [
     "cofre",
@@ -13,12 +13,12 @@
     "offline",
     "linux-mint"
   ],
-  "author": "Chronos Atalante",
-  "homepage": "https://github.com/chronos-atalante/zena-keypass",
+  "author": "Otaku Delirante",
+  "homepage": "https://github.com/chronos-atalante/guardinha",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "GUARDINHA_VAULT_DIR=\"$PWD/.dev-vault\" electron-vite dev",
     "clean": "rm -rf out release",
     "build": "npm run clean && electron-vite build",
     "start": "electron-vite preview",
@@ -27,7 +27,9 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run security:audit && npm run lint:shell",
+    "security:audit": "bin/osv-scanner scan source --lockfile package-lock.json --config .osv-scanner.toml .",
+    "lint:shell": "bin/shellcheck build/scripts/after-install.sh build/scripts/after-remove.sh build/scripts/guardinha-setup",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -83,16 +85,26 @@
     }
   },
   "build": {
-    "appId": "com.zena.keypass",
-    "productName": "ZenaKey",
-    "artifactName": "zena-keypass_${version}_${arch}.${ext}",
+    "appId": "com.guardinha.keypass",
+    "productName": "Guardinha",
+    "artifactName": "guardinha_${version}_${arch}.${ext}",
+    "icon": "build/icon.png",
+    "afterPack": "./build/after-pack.cjs",
     "directories": {
       "output": "release",
       "buildResources": "build"
     },
     "files": [
       "out/**/*",
+      "build/icon.png",
+      "THIRD-PARTY-NOTICES.txt",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/scripts/guardinha-setup",
+        "to": "guardinha-setup"
+      }
     ],
     "asar": true,
     "linux": {
@@ -100,13 +112,15 @@
         "deb"
       ],
       "category": "Utility",
-      "executableName": "zena-keypass",
+      "executableName": "guardinha",
       "syncDesktopName": true,
       "maintainer": "Chronos Atalante <chronos.biblioteca@proton.me>",
       "synopsis": "Cofre de credenciais offline com criptografia AES-256-GCM"
     },
     "deb": {
       "priority": "optional",
+      "afterInstall": "build/scripts/after-install.sh",
+      "afterRemove": "build/scripts/after-remove.sh",
       "depends": [
         "libgtk-3-0",
         "libnotify4",

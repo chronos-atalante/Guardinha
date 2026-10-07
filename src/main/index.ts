@@ -38,7 +38,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 520,
     minHeight: 360,
-    title: 'ZenaKey',
+    title: 'Guardinha',
     backgroundColor: '#020617',
     ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     show: false,

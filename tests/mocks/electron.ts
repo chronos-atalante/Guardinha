@@ -38,14 +38,14 @@ export class BrowserWindow {
 }
 
 export const app = {
-  getPath: vi.fn<(name: string) => string>(() => '/tmp/zena-tests-appdata'),
+  getPath: vi.fn<(name: string) => string>(() => '/tmp/guardinha-tests-appdata'),
   setPath: vi.fn<(name: string, value: string) => void>(),
   requestSingleInstanceLock: vi.fn<() => boolean>(() => true),
   quit: vi.fn<() => void>(),
   on: vi.fn<(event: string, listener: WindowEventHandler) => void>(),
   whenReady: vi.fn<() => Promise<void>>(() => Promise.resolve()),
-  getName: vi.fn<() => string>(() => 'zena-keypass'),
-  name: 'ZenaKey',
+  getName: vi.fn<() => string>(() => 'guardinha'),
+  name: 'Guardinha',
   isPackaged: vi.fn<() => boolean>(() => false),
 };
 

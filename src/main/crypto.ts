@@ -39,7 +39,7 @@ export async function deriveKey(password: string, salt: Buffer): Promise<Buffer>
 
 /** Derivação de chave por arquivo (HKDF-SHA512 a partir da chave do cofre). */
 export function deriveEntryKey(vaultKey: Buffer, salt: Buffer): Buffer {
-  return Buffer.from(crypto.hkdfSync('sha512', vaultKey, salt, 'zena-vault-entry-v1', 32));
+  return Buffer.from(crypto.hkdfSync('sha512', vaultKey, salt, 'guardinha-vault-entry-v1', 32));
 }
 
 export function randomBytes(size: number): Buffer {

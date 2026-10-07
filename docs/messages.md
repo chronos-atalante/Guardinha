@@ -37,7 +37,7 @@ Regras das strings:
 
 - **Dados por dependência**: `DEPENDENCIES[].role/nome`
   (`src/renderer/src/attributions.ts`).
-- **Nomes de marca**: `ZenaKey`, `Linux Mint`, `Electron`, `Tailwind CSS`…
+- **Nomes de marca**: `Guardinha`, `Linux Mint`, `Electron`, `Tailwind CSS`…
   (título da janela, nomes de pacotes).
 - **Logs** (`console.error`): diagnóstico, não UI.
 - **Chaves internas**: nomes de canal IPC, ids de arquivo, regex.

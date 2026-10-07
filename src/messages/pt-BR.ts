@@ -26,7 +26,7 @@ export const ptBR = {
   },
 
   app: {
-    name: 'ZenaKey',
+    name: 'Guardinha',
     subtitle: 'Cofre do Mint 22.X',
     statusLocal: '100% Local / Criptografado',
     nav: {
@@ -45,7 +45,7 @@ export const ptBR = {
     createTitle: 'Crie o seu cofre',
     createSubtitle:
       'A senha mestra tem exatamente **24 caracteres** e é a única chave do cofre. ' +
-      'Nada sai daqui: tudo fica em `~/.zena-vault/`.',
+      'Nada sai daqui: tudo fica cifrado em `/var/lib/.guardinha/.vault/`.',
     masterLabel: 'Senha mestra (24 caracteres)',
     masterPlaceholder: 'Ex.: 24 caracteres quaisquer',
     masterConfirmLabel: 'Repita a senha mestra',
@@ -153,8 +153,15 @@ export const ptBR = {
   /** Erros emitidos pelo processo main (já localizados no momento da emissão). */
   errors: {
     vaultExists: 'O cofre já existe.',
-    vaultMissing: 'Cofre não encontrado em ~/.zena-vault/.',
+    vaultMissing: 'Cofre não encontrado em /var/lib/.guardinha/.vault/.',
     vaultLocked: 'Cofre bloqueado: desbloqueie antes de acessar as credenciais.',
+    vaultTampered: 'O cofre está incompleto ou foi alterado fora do app.',
+    vaultDirUnavailable:
+      'Sem permissão para gravar em /var/lib/.guardinha/.vault/. ' +
+      'Reinstale o .deb com `sudo dpkg -i` para recriar a pasta com as permissões corretas.',
+    vaultAuthCancelled:
+      'A pasta do cofre em /var/lib/.guardinha não foi criada: ' +
+      'a autenticação de administrador foi cancelada ou recusada.',
     wrongMaster: 'Senha mestra incorreta.',
     wrongPin: 'PIN incorreto.',
     wrongRecovery: 'Frase de recuperação incorreta.',

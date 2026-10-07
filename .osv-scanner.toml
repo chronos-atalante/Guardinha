@@ -1,0 +1,15 @@
+# Configuração do osv-scanner (`npm run security:audit`).
+# Roda sobre o package-lock.json com o filtro de alarmes falsos.
+#
+# Mecanismo: `[[IgnoredVulns]]` com `id` + `ignoreUntil` (YYYY-MM-DD) mantém um
+# alerta suprimido só até a data — depois disso ele volta e precisa ser
+# resolvido de verdade. `reason` documenta por que vale manter suprimido.
+#
+# Histórico: nenhum ignore ativo neste repositório.
+#
+# Exemplo (adicionar só quando houver alerta real):
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = "2026-12-31"
+# reason = "só em dependência de build; não entra no .deb"

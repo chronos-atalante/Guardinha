@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   calculateLockout,
   getLockRemainingMs,
@@ -11,8 +11,35 @@ import {
   validatePinFormat,
   validateUsernameFormat,
 } from '@zero/main/auth';
+import { writeVaultContainer } from '@zero/main/storage';
 
 const BASE = new Date('2026-01-01T12:00:00Z').getTime();
+
+/**
+ * A trava exponencial agora vive dentro do `vault.zkv` (nada de JSON legível);
+ * só persiste quando há um cofre. Semeia um container mínimo de forma barata
+ * (sem Argon2), já que o estado não depende das credenciais serem válidas.
+ */
+function seedContainer(): void {
+  writeVaultContainer({
+    createdAt: BASE,
+    kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
+    attempts: 0,
+    lockUntil: null,
+    methods: {
+      master: {
+        kdfSalt: 'a'.repeat(32),
+        payload: {
+          salt: 'b'.repeat(32),
+          iv: 'c'.repeat(32),
+          tag: 'd'.repeat(32),
+          encryptedData: 'ee',
+        },
+      },
+    },
+    manifest: null,
+  });
+}
 
 afterEach(() => {
   resetAttempts();
@@ -20,6 +47,13 @@ afterEach(() => {
 });
 
 describe('trava exponencial', () => {
+  beforeAll(() => {
+    seedContainer();
+  });
+
+  afterAll(() => {
+    resetAttempts();
+  });
   it('escala 10s, 30s, 1m, 1h, 24h e trava no teto', () => {
     vi.useFakeTimers();
     vi.setSystemTime(BASE);
@@ -64,9 +98,9 @@ describe('trava exponencial', () => {
 
 describe('validações de formato', () => {
   it('senha mestra: exatamente 24 caracteres', () => {
-    expect(validateMasterPasswordFormat('senha-mestra-de-zena-24c')).toBe(true);
+    expect(validateMasterPasswordFormat('senha-mestra-guardinha24')).toBe(true);
     expect(validateMasterPasswordFormat('curta')).toBe(false);
-    expect(validateMasterPasswordFormat('senha-mestra-de-zena-24cx')).toBe(false);
+    expect(validateMasterPasswordFormat('senha-mestra-guardinha24x')).toBe(false);
   });
 
   it('PIN: exatamente 8 dígitos', () => {

@@ -21,7 +21,7 @@ export const en: Messages = {
   },
 
   app: {
-    name: 'ZenaKey',
+    name: 'Guardinha',
     subtitle: 'Mint 22.X Vault',
     statusLocal: '100% Local / Encrypted',
     nav: {
@@ -40,7 +40,8 @@ export const en: Messages = {
     createTitle: 'Create your vault',
     createSubtitle:
       'The master password is exactly **24 characters** and is the only key to the vault. ' +
-      'Nothing leaves this machine: everything stays in `~/.zena-vault/`.',
+      'Nothing leaves this machine: everything stays encrypted in ' +
+      '`/var/lib/.guardinha/.vault/`.',
     masterLabel: 'Master password (24 characters)',
     masterPlaceholder: 'Ex.: any 24 characters',
     masterConfirmLabel: 'Repeat the master password',
@@ -147,8 +148,15 @@ export const en: Messages = {
 
   errors: {
     vaultExists: 'The vault already exists.',
-    vaultMissing: 'Vault not found in ~/.zena-vault/.',
+    vaultMissing: 'Vault not found in /var/lib/.guardinha/.vault/.',
     vaultLocked: 'Vault locked: unlock it before accessing credentials.',
+    vaultTampered: 'The vault is incomplete or was altered outside the app.',
+    vaultDirUnavailable:
+      'No permission to write to /var/lib/.guardinha/.vault/. ' +
+      'Reinstall the .deb with `sudo dpkg -i` to recreate the folder with the right permissions.',
+    vaultAuthCancelled:
+      'The vault folder in /var/lib/.guardinha was not created: ' +
+      'administrator authentication was cancelled or refused.',
     wrongMaster: 'Wrong master password.',
     wrongPin: 'Wrong PIN.',
     wrongRecovery: 'Wrong recovery phrase.',

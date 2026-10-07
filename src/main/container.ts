@@ -40,19 +40,31 @@ export interface VaultKdfParams {
   parallelism: number;
 }
 
+/** Chave do cofre embrulhada por uma credencial (Argon2id + AES-256-GCM). */
+export interface WrappedMethod {
+  /** Salt do Argon2id (128 bits). */
+  kdfSalt: string;
+  /** Registro cifrado com a própria chave derivada. */
+  payload: SaltedPayload;
+}
+
 export interface VaultContainerData {
   createdAt: number;
   kdf: VaultKdfParams;
   attempts: number;
   lockUntil: number | null;
   /** Chave do cofre embrulhada por cada credencial (blobs cifrados). */
-  methods: { master?: SaltedPayload; pin?: SaltedPayload; recovery?: SaltedPayload };
+  methods: { master?: WrappedMethod; pin?: WrappedMethod; recovery?: WrappedMethod };
   /** Lista de ids cifrada com a chave do cofre; `null` = ainda não sellada. */
   manifest: SaltedPayload | null;
 }
 
 function blobBytes(payload: SaltedPayload): number {
   return BLOB_HEAD_BYTES + Buffer.from(payload.encryptedData, 'hex').length;
+}
+
+function methodBlobBytes(method: WrappedMethod): number {
+  return 16 + blobBytes(method.payload);
 }
 
 function writeBlob(buffer: Buffer, offset: number, payload: SaltedPayload): number {
@@ -65,10 +77,7 @@ function writeBlob(buffer: Buffer, offset: number, payload: SaltedPayload): numb
   return offset + 52 + text.length;
 }
 
-function readBlob(
-  buffer: Buffer,
-  offset: number,
-): { payload: SaltedPayload; next: number } | null {
+function readBlob(buffer: Buffer, offset: number): { payload: SaltedPayload; next: number } | null {
   const head = offset + BLOB_HEAD_BYTES;
   if (head > buffer.length) return null;
   const textLength = buffer.readUInt32BE(offset + 48);
@@ -85,18 +94,39 @@ function readBlob(
   };
 }
 
+function writeMethodBlob(buffer: Buffer, offset: number, method: WrappedMethod): number {
+  Buffer.from(method.kdfSalt, 'hex').copy(buffer, offset);
+  return writeBlob(buffer, offset + 16, method.payload);
+}
+
+function readMethodBlob(
+  buffer: Buffer,
+  offset: number,
+): { method: WrappedMethod; next: number } | null {
+  if (offset + 16 > buffer.length) return null;
+  const read = readBlob(buffer, offset + 16);
+  if (read === null) return null;
+  return {
+    method: {
+      kdfSalt: buffer.subarray(offset, offset + 16).toString('hex'),
+      payload: read.payload,
+    },
+    next: read.next,
+  };
+}
+
 export function packVaultContainer(data: VaultContainerData): Buffer {
-  const methods: [number, SaltedPayload | undefined][] = [
+  const methods: [number, WrappedMethod | undefined][] = [
     [FLAG_MASTER, data.methods.master],
     [FLAG_PIN, data.methods.pin],
     [FLAG_RECOVERY, data.methods.recovery],
   ];
   let flags = 0;
   let size = VAULT_HEADER_BYTES;
-  for (const [flag, payload] of methods) {
-    if (payload !== undefined) {
+  for (const [flag, method] of methods) {
+    if (method !== undefined) {
       flags |= flag;
-      size += blobBytes(payload);
+      size += methodBlobBytes(method);
     }
   }
   if (data.manifest !== null) {
@@ -116,9 +146,9 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
   buffer.writeUInt8(flags, 44);
 
   let cursor = VAULT_HEADER_BYTES;
-  for (const [flag, payload] of methods) {
-    if (payload !== undefined && (flags & flag) !== 0) {
-      cursor = writeBlob(buffer, cursor, payload);
+  for (const [flag, method] of methods) {
+    if (method !== undefined && (flags & flag) !== 0) {
+      cursor = writeMethodBlob(buffer, cursor, method);
     }
   }
   if (data.manifest !== null) cursor = writeBlob(buffer, cursor, data.manifest);
@@ -142,9 +172,9 @@ export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null 
   ];
   for (const [flag, name] of entries) {
     if ((flags & flag) === 0) continue;
-    const read = readBlob(buffer, cursor);
+    const read = readMethodBlob(buffer, cursor);
     if (read === null) return null;
-    methods[name] = read.payload;
+    methods[name] = read.method;
     cursor = read.next;
   }
 
@@ -213,13 +243,14 @@ export function sealManifest(vaultKey: Buffer, ids: string[]): SaltedPayload {
 /** Abre o manifesto; qualquer forma inesperada lança (fail-closed). */
 export function openManifest(vaultKey: Buffer, payload: SaltedPayload): string[] {
   const value = decryptRecord(payload, vaultKey) as Record<string, unknown>;
-  if (value['v'] !== MANIFEST_VERSION || !Array.isArray(value['ids'])) {
+  const ids = value.ids;
+  if (value.v !== MANIFEST_VERSION || !Array.isArray(ids)) {
     throw new Error('manifesto inválido');
   }
-  const ids: string[] = [];
-  for (const id of value['ids']) {
+  const result: string[] = [];
+  for (const id of ids) {
     if (typeof id !== 'string' || id === '') throw new Error('manifesto inválido');
-    ids.push(id);
+    result.push(id);
   }
-  return ids;
+  return result;
 }

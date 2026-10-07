@@ -1,0 +1,41 @@
+name: Agradecer contribuições
+
+# Comenta no PR mesclado agradecendo a pessoa contribuidora.
+# Usa pull_request_target porque PRs de fork só têm token de leitura no
+# evento pull_request; como não há checkout nem execução de código do fork,
+# só a chamada de API, é seguro.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  agradecer:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comentar agradecimento
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = [
+              `Obrigado, @${pr.user.login}, pela contribuição!`,
+              '',
+              `Seu PR #${pr.number} (${pr.title}) foi mesclado no Guardinha.`,
+              'Ajudou o projeto a ficar melhor para todo mundo que usa.',
+              '',
+              'Para as próximas mudanças, veja o CONTRIBUTING.md.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body,
+            });

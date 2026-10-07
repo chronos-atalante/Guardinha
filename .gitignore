@@ -1,6 +1,12 @@
 node_modules/
 out/
 release/
+# workspace temporário do repo APT flat gerado no CI (publish.yml)
+apt/
 coverage/
 *.deb
 .DS_Store
+.dev-vault/
+bin/osv-scanner
+bin/shellcheck
+

@@ -19,11 +19,14 @@ export default defineConfig({
     alias: aliases,
   },
   test: {
-    name: 'zena-keypass',
+    name: 'guardinha',
     root: import.meta.dirname,
     environment: 'jsdom',
     pool: 'forks',
     clearMocks: false,
+    // Argon2id real (64 MB, t=3) roda em deguardinhas de testes: sob carga o KDF
+    // passa de 5 s e o limite padrão do Vitest vira falso positivo.
+    testTimeout: 30_000,
     setupFiles: ['tests/setup-env.ts', 'tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
     coverage: {

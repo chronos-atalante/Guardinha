@@ -7,10 +7,10 @@ import path from 'node:path';
  * diretório temporário exclusivo deste processo de teste. Precisa rodar antes
  * do import dos módulos sob teste, por isso fica em `setupFiles`.
  */
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zena-keypass-tests-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'guardinha-tests-'));
 
 process.env.HOME = root;
-process.env.ZENA_VAULT_DIR = path.join(root, '.zena-vault');
+process.env.GUARDINHA_VAULT_DIR = path.join(root, '.guardinha-vault');
 delete process.env.ELECTRON_RENDERER_URL;
 
 function cleanup(): void {
