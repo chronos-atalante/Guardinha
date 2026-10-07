@@ -4,6 +4,21 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [1.0.1] - 2026-10-07
+
+### Alterado
+
+- Ferramenta de build atualizada: vite 8 (rolldown) e electron-vite
+  6.0.0-beta.6 — build mais rápido e bundle do renderer menor, sem mudança
+  de comportamento do app.
+
+### Corrigido
+
+- CI: `github/codeql-action` em v4.38.2 com `init` e `analyze` na mesma
+  versão; `npm ci` volta a resolver as dependências (peer do electron-vite
+  com vite 8); a publicação do `.deb` tolera a ausência dos segredos
+  opcionais de GPG/APT e Vercel.
+
 ## [1.0.0] - 2026-10-07
 
 Primeira versão pública do **Guardinha** (pacote `.deb` para Linux Mint 22.X).

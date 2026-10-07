@@ -16,7 +16,7 @@ projeto (ver `author` em `package.json`), incluindo se possível:
 
 - o que acontece e o impacto estimado;
 - passo a passo para reproduzir;
-- versão do app (`1.0.0` em `package.json`) e do sistema.
+- versão do app (campo `version` em `package.json`) e do sistema.
 
 Nos comprometemos a confirmar o recebimento, investigar e, confirmado o
 problema, publicar a correção com crédito a quem reportou (salvo pedido em
