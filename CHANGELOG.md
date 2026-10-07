@@ -4,6 +4,15 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [1.0.3] - 2026-10-07
+
+### Alterado
+
+- Seletor de idioma na Sidebar voltou a ser um campo retangular com o menu
+  embutido: o menu abre abaixo do campo, o item ativo aparece em verde com
+  check, e o campo fecha no clique fora, no `Escape` ou após a escolha (com
+  navegação por setas, Home e End).
+
 ## [1.0.2] - 2026-10-07
 
 ### Alterado

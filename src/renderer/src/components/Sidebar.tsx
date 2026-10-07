@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { Film, Key, Lock, Settings, Shield } from 'lucide-react';
-import { LANGUAGE_LABELS, LANGUAGES } from '@zero/messages';
+import { LanguageSelect } from '@zero/renderer/components/LanguageSelect';
 import { useMessages } from '@zero/renderer/i18n';
 import type { Language } from '@zero/types';
 
@@ -61,25 +61,8 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="px-2 space-y-1.5">
-          <span className="text-xs text-slate-500">{m.app.languageLabel}</span>
-          <div className="flex gap-2" role="group" aria-label={m.app.languageLabel}>
-            {LANGUAGES.map((code) => (
-              <button
-                key={code}
-                type="button"
-                aria-pressed={language === code}
-                onClick={() => onLanguageChange(code)}
-                className={`flex-1 px-2.5 py-1.5 rounded-full text-xs border cursor-pointer transition-colors ${
-                  language === code
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-semibold'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                }`}
-              >
-                {LANGUAGE_LABELS[code]}
-              </button>
-            ))}
-          </div>
+        <div className="px-2">
+          <LanguageSelect language={language} onLanguageChange={onLanguageChange} />
         </div>
 
         <button

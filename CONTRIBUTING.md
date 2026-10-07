@@ -103,8 +103,8 @@ usuário ganham entrada em [`CHANGELOG.md`](CHANGELOG.md).
 Use [Conventional Commits](https://www.conventionalcommits.org/) em pt-BR no
 título do commit vindo da `developer` para a `main`:
 
-- `feat: ...` → nova funcionalidade (sobe `MINOR`, ex.: 1.0.2 → 1.1.0);
-- `fix: ...` → correção de bug (sobe `PATCH`, ex.: 1.0.2 → 1.0.3);
+- `feat: ...` → nova funcionalidade (sobe `MINOR`, ex.: 1.0.3 → 1.1.0);
+- `fix: ...` → correção de bug (sobe `PATCH`, ex.: 1.0.3 → 1.0.4);
 - `docs: ...`, `test: ...`, `chore: ...`, `refactor: ...` → sem lançamento.
 
 Para publicar uma versão (a partir da `main`):
