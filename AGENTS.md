@@ -101,6 +101,12 @@ Camadas:
   PIN ou frase.
 - Renderer com CSP e preload sandboxed (por isso ele é CommonJS); não
   enfraquecer `contextIsolation` nem inserir HTML dinâmico.
+- Janela e sessão contidas (`src/main/index.ts`): navegação presa à página do
+  app (`will-navigate`), `window.open` só repassa `https:` para o navegador do
+  sistema, permissões web da sessão negadas menos o clipboard e DevTools
+  (`devTools: !app.isPackaged`) desligado no empacotado; não afrouxar.
+- Credencial copiada some do clipboard 30 s depois
+  (`src/renderer/src/clipboard.ts`), salvo o usuário copiar outra coisa antes.
 - Argon2id com 64 MB / t=3 / p=4 e AES-256-GCM por arquivo: mudar parâmetros
   exige migrar o `vault.zkv` (versão `2`) e converter entradas legadas.
 - `.deb` e `out/` nunca entram no git.

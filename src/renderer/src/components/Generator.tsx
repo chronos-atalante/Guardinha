@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import { Copy, RefreshCw, Sparkles } from 'lucide-react';
 import { useMessages } from '@zero/renderer/i18n';
+import { copyAndAutoClear } from '@zero/renderer/clipboard';
 import { SensitivitySlider } from '@zero/renderer/components/SensitivitySlider';
 
 interface GeneratorProps {
@@ -47,7 +48,7 @@ export function Generator({ onToast }: GeneratorProps): JSX.Element {
   };
 
   const handleCopy = async (): Promise<void> => {
-    await navigator.clipboard.writeText(generatedPassword);
+    await copyAndAutoClear(generatedPassword);
     onToast(m.generator.toastCopied);
   };
 

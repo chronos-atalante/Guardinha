@@ -4,6 +4,20 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [1.1.0] - 2026-10-07
+
+### Segurança
+
+- janela: navegação presa na página do app (`will-navigate` recusa qualquer
+  URL fora da página carregada) e `window.open` nunca cria janela: só repassa
+  `https:` para o navegador do sistema (`setWindowOpenHandler`).
+- sessão: toda permissão web do renderer (mídia, geolocalização, notificações…)
+  é negada; só o clipboard passa, para copiar usuário/senha.
+- área de transferência: copiar usuário, senha ou senha gerada limpa o
+  clipboard 30 s depois, salvo o usuário já ter copiado outra coisa antes
+  (`src/renderer/src/clipboard.ts`).
+- produção: DevTools desligado no app empacotado (`devTools: !app.isPackaged`).
+
 ## [1.0.3] - 2026-10-07
 
 ### Alterado

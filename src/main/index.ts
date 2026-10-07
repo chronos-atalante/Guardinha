@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Menu, app, BrowserWindow, ipcMain, shell } from 'electron';
+import { pathToFileURL } from 'node:url';
+import { Menu, app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
 import { validateDomainFormat } from '@zero/main/auth';
 import { removeEntry, saveEntry, listEntries } from '@zero/main/entries';
@@ -48,20 +49,49 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // Em produção o DevTools fica de fora: atalho não expõe o renderer.
+      devTools: !app.isPackaged,
     },
   });
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
+  // O app é uma SPA local: navegação só vale para a própria página (o reload
+  // mantém a mesma URL); qualquer salto para outra URL é recusado.
   const devUrl = process.env.ELECTRON_RENDERER_URL;
-  if (devUrl !== undefined && devUrl !== '') {
-    void mainWindow.loadURL(devUrl);
-  } else {
-    void mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-  }
+  const targetUrl =
+    devUrl !== undefined && devUrl !== ''
+      ? devUrl
+      : pathToFileURL(path.join(__dirname, '../renderer/index.html')).toString();
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== targetUrl) event.preventDefault();
+  });
+
+  // `window.target=_blank` nunca cria janela: https vai para o navegador do
+  // sistema e o resto (javascript:, file:, data:) é só recusado.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url).catch((error: unknown) => {
+        console.error('Falha ao abrir URL externa:', error);
+      });
+    }
+    return { action: 'deny' };
+  });
+
+  void mainWindow.loadURL(targetUrl);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+/**
+ * Nega toda permissão web do renderer (mídia, geolocalização, notificações…);
+ * só o clipboard passa, para copiar usuário/senha e a limpeza automática.
+ */
+function registerPermissionPolicy(): void {
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'clipboard-read' || permission === 'clipboard-sanitized-write');
   });
 }
 
@@ -130,6 +160,7 @@ if (!gotLock) {
     .then(() => {
       registerIpc();
       removeApplicationMenu();
+      registerPermissionPolicy();
       createWindow();
 
       app.on('activate', () => {

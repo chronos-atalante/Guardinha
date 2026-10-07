@@ -7,8 +7,12 @@ import { vi } from 'vitest';
 
 export type IpcHandler = (event: unknown, ...args: unknown[]) => unknown;
 export type WindowEventHandler = (...args: unknown[]) => unknown;
+export type WindowOpenHandler = (details: { url: string }) => {
+  action: 'deny' | 'allow';
+};
 
 export class MockWebContents {
+  public readonly setWindowOpenHandler = vi.fn<(handler: WindowOpenHandler) => void>();
   public readonly send = vi.fn<(channel: string, payload: unknown) => void>();
   public readonly on = vi.fn<(event: string, listener: WindowEventHandler) => void>();
 }
@@ -46,7 +50,8 @@ export const app = {
   whenReady: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   getName: vi.fn<() => string>(() => 'guardinha'),
   name: 'Guardinha',
-  isPackaged: vi.fn<() => boolean>(() => false),
+  // Propriedade booleana, como no Electron real (não função).
+  isPackaged: false,
 };
 
 export const Menu = {
@@ -71,6 +76,23 @@ export const contextBridge = {
   exposeInMainWorld: vi.fn<(key: string, api: unknown) => void>(),
 };
 
+export const shell = {
+  openExternal: vi.fn<(url: string) => Promise<void>>(() => Promise.resolve()),
+};
+
+export type PermissionRequestHandler = (
+  webContents: unknown,
+  permission: string,
+  callback: (permissionGranted: boolean) => void,
+  details: unknown,
+) => void;
+
+export const session = {
+  defaultSession: {
+    setPermissionRequestHandler: vi.fn<(handler: PermissionRequestHandler) => void>(),
+  },
+};
+
 export function resetElectronMock(): void {
   BrowserWindow.instances.length = 0;
   app.getPath.mockClear();
@@ -88,5 +110,6 @@ export function resetElectronMock(): void {
   BrowserWindow.getAllWindows.mockClear();
   BrowserWindow.fromWebContents.mockClear();
   app.getName.mockClear();
-  app.isPackaged.mockClear();
+  shell.openExternal.mockClear();
+  session.defaultSession.setPermissionRequestHandler.mockClear();
 }

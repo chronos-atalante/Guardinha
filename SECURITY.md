@@ -4,7 +4,7 @@
 
 | Versão | Suporte             |
 | ------ | ------------------- |
-| 1.0.x  | ✅ Correções ativas |
+| 1.1.x  | ✅ Correções ativas |
 
 Versões anteriores ao 1.0.0 não recebem correções; atualize pelo `.deb` mais
 recente da Release correspondente (`npm run dist` gera em `release/`).
@@ -52,8 +52,15 @@ contrário).
   `ipcRenderer.invoke` com contrato tipado (`docs/api.md`).
 - **Fronteiras validadas**: ids de registro na IPC precisam de UUID e passam
   por `assertSafeEntryId` (rejeita `/`, `\` e `\0`; defesa em profundidade
-  inspirada no CVE-2026-21589); navegação externa só pelo canal
-  `shell:open-domain`, que recusa protocolo fora de `http:`/`https:`.
+  inspirada no CVE-2026-21589); navegação externa só pelos canais
+  `shell:open-domain` e o tratador de `window.open`, que recusam protocolo fora
+  de `http:`/`https:`.
+- **Janela e sessão contidas**: a navegação do renderer fica presa na página do
+  app (`will-navigate` recusa salto para outra URL), `window.open` não cria
+  janela dentro do app, toda permissão web da sessão é negada no renderer
+  menos o clipboard (necessário para copiar credenciais), DevTools está
+  desligado no app empacotado e o conteúdo copiado expira sozinho do clipboard
+  após 30 s (salvo cópia posterior do usuário).
 - **Auditoria contínua**: `npm run security:audit` (OSV Scanner sobre o
   lockfile, filtro em `.osv-scanner.toml`) roda em todo `npm run check`;
   `npm run lint:shell` varre os scripts de empacotamento; o CodeQL roda no CI

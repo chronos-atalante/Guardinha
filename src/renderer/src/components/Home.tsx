@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { Copy, Globe, KeyRound, Pencil, Plus, Search, User } from 'lucide-react';
 import { useMessages } from '@zero/renderer/i18n';
+import { copyAndAutoClear } from '@zero/renderer/clipboard';
 import { EntryModal } from '@zero/renderer/components/EntryModal';
 import type { Credential } from '@zero/types';
 
@@ -35,7 +36,7 @@ export function Home({ onToast }: HomeProps): JSX.Element {
   }, [reload]);
 
   const handleCopy = async (value: string): Promise<void> => {
-    await navigator.clipboard.writeText(value);
+    await copyAndAutoClear(value);
     onToast(m.app.toastCopied);
   };
 

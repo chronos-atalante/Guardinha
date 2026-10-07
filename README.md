@@ -83,6 +83,11 @@ Segue o mesmo padrão do **chronos-biblioteca**:
   no lock.
 - `contextIsolation: true`, `sandbox: true`, preload CJS e CSP no `index.html`.
 - Nenhuma senha ou frase em log; erros chegam à UI já localizados.
+- Navegação presa à página do app; `window.open` só repassa `https:` para o
+  navegador do sistema; toda permissão web da sessão é negada, menos o
+  clipboard (cópia de usuário/senha).
+- Copiar credencial limpa o clipboard 30 s depois, salvo cópia posterior do
+  usuário; DevTools fica desligado no app empacotado.
 
 ## Licença
 
