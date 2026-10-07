@@ -156,7 +156,7 @@ jobs:
           fi
 
       - name: Anexar .deb à Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: release/guardinha_*_amd64.deb
           # Se a Release ainda não existe (tag manual), ela é criada aqui.
@@ -225,7 +225,7 @@ jobs:
       - name: Anexar repo APT à Release
         # Pula junto com a geração (só existem arquivos se o step anterior rodou).
         if: ${{ env.GPG_PRIVATE_KEY != '' }}
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             apt/guardinha_amd64.deb
