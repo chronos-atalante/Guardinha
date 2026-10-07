@@ -34,8 +34,13 @@ concurrency:
   cancel-in-progress: false
 
 # secrets não pode ser usado em `if:`; copia para env (padrão do GitHub).
+# Sem estes secrets os steps dependentes são pulados em silêncio e a Release
+# sai só com o .deb — quando forem adicionados em Settings → Secrets →
+# Actions, eles voltam a rodar sozinhos, sem editar o workflow.
 env:
   VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+  GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+  GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
 jobs:
   resolver-versao:
@@ -159,9 +164,9 @@ jobs:
           tag_name: ${{ needs.resolver-versao.outputs.tag }}
 
       - name: Gerar repo APT flat assinado (assets estáveis)
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # Sem GPG_PRIVATE_KEY (repo novo, secrets ainda do outro repositório),
+        # pula: o .deb já foi anexado no step anterior e a Release fica verde.
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         run: |
           set -euo pipefail
           if [ -z "$GPG_PRIVATE_KEY" ]; then
@@ -218,6 +223,8 @@ jobs:
           echo "Repo APT flat gerado:" && ls -l
 
       - name: Anexar repo APT à Release
+        # Pula junto com a geração (só existem arquivos se o step anterior rodou).
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
