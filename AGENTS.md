@@ -107,6 +107,10 @@ Camadas:
   (`devTools: !app.isPackaged`) desligado no empacotado; não afrouxar.
 - Credencial copiada some do clipboard 30 s depois
   (`src/renderer/src/clipboard.ts`), salvo o usuário copiar outra coisa antes.
+- Na produção a SPA é servida por `guardinha://` via
+  `registerAppProtocol` (substitui `file://`); todo handler IPC valida
+  `event.senderFrame` com `assertAppFrame`. Fuses de segurança no electron-
+  builder via chave `electronFuses`.
 - Argon2id com 64 MB / t=3 / p=4 e AES-256-GCM por arquivo: mudar parâmetros
   exige migrar o `vault.zkv` (versão `2`) e converter entradas legadas.
 - `.deb` e `out/` nunca entram no git.

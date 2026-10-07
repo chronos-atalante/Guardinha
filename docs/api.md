@@ -8,6 +8,11 @@ Contrato único entre renderer e main. Definido em `src/types/api.ts`
 > Erros do processo main chegam ao renderer como `Error` rejeitado, com a
 > mensagem **já localizada** no idioma corrente (`currentMessages()`).
 
+Guarda de origem: todo handler IPC chama `assertAppFrame(event)` antes da
+lógica de domínio, exigindo `event.senderFrame` apontando para a página
+oficial do app (scheme `guardinha://` em produção ou dev server do Vite em
+dev); uma mensagem de emissor desconhecido é bloqueada com erro.
+
 ## `window.api.vault`
 
 | Método            | Canal            | Payload → retorno                | Descrição                                                                                         |
