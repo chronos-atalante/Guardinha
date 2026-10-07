@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "electron.vite.config.mts",
+    "vitest.config.mts",
+    "src/node.loader.ts",
+    "src/main/**/*",
+    "src/messages/**/*",
+    "src/preload/**/*",
+    "src/types/**/*"
+  ]
+}

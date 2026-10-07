@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: #020617;
+}
+
+/* Scrollbar discreta no estilo da UI */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #020617;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 8px;
+}
+
+/* Pós-créditos de cinema: rolagem lenta, contínua e em loop */
+@keyframes movie-credits {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+.credits-track {
+  animation: movie-credits 40s linear infinite;
+}
+
+.credits-viewport:hover .credits-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credits-track {
+    animation: none;
+  }
+}
