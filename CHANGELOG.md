@@ -6,6 +6,8 @@ em português do Brasil.
 
 ## [Não lançado]
 
+## [1.2.1] - 2026-10-08
+
 ### Adicionado
 
 - Aba **Configurações** na sidebar, logo abaixo de Atribuições: por ora mostra
