@@ -34,13 +34,8 @@ concurrency:
   cancel-in-progress: false
 
 # secrets não pode ser usado em `if:`; copia para env (padrão do GitHub).
-# Sem estes secrets os steps dependentes são pulados em silêncio e a Release
-# sai só com o .deb — quando forem adicionados em Settings → Secrets →
-# Actions, eles voltam a rodar sozinhos, sem editar o workflow.
 env:
   VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-  GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-  GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
 jobs:
   resolver-versao:
@@ -164,9 +159,9 @@ jobs:
           tag_name: ${{ needs.resolver-versao.outputs.tag }}
 
       - name: Gerar repo APT flat assinado (assets estáveis)
-        # Sem GPG_PRIVATE_KEY (repo novo, secrets ainda do outro repositório),
-        # pula: o .deb já foi anexado no step anterior e a Release fica verde.
-        if: ${{ env.GPG_PRIVATE_KEY != '' }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [ -z "$GPG_PRIVATE_KEY" ]; then
@@ -186,14 +181,14 @@ jobs:
             exit 1
           fi
           if [ -n "${GPG_PASSPHRASE:-}" ]; then
-            G_OPTS=(--batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+            GPG_OPTS=(--batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
           else
-            G_OPTS=(--batch --yes)
+            GPG_OPTS=(--batch --yes)
           fi
           # Teste de assinatura antes de gerar nada: falha = passphrase errada
           # (ou secret GPG_PASSPHRASE ausente — no CI não há pinentry).
           echo preflight > apt/.sign-test
-          if ! gpg "${G_OPTS[@]}" --clearsign -o apt/.sign-test.asc apt/.sign-test; then
+          if ! gpg "${GPG_OPTS[@]}" --clearsign -o apt/.sign-test.asc apt/.sign-test; then
             echo "::error::GPG_PASSPHRASE incorreto (ou secret ausente) para a chave F2B0A3843C9FF986."
             exit 1
           fi
@@ -217,14 +212,12 @@ jobs:
             -o APT::FTPArchive::Release::Description="Guardinha" \
             . > ../Release.tmp
           mv ../Release.tmp Release
-          gpg "${G_OPTS[@]}" --clearsign -o InRelease Release
-          gpg "${G_OPTS[@]}" -abs -o Release.gpg Release
+          gpg "${GPG_OPTS[@]}" --clearsign -o InRelease Release
+          gpg "${GPG_OPTS[@]}" -abs -o Release.gpg Release
           gpg --armor --export > public.key
           echo "Repo APT flat gerado:" && ls -l
 
       - name: Anexar repo APT à Release
-        # Pula junto com a geração (só existem arquivos se o step anterior rodou).
-        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
