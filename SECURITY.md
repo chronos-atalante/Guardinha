@@ -89,6 +89,16 @@ contrário).
   (push/PR para `main` e semanalmente).
 - **Sem servidor intermediário**: o app não abre conexão de rede alguma: não
   há endpoint do Guardinha a atacar; credenciais nunca saem da máquina.
+- **Confinamento AppArmor**: o `.deb` instala um perfil restritivo em
+  `/etc/apparmor.d/guardinha` (origem `build/apparmor-profile`, declarado em
+  `build.deb.appArmorProfile`) sobre o executável
+  `/opt/Guardinha/guardinha`. Ele nega leitura de arquivos do usuário, nega
+  escrita fora dos diretórios do app, do cofre e do `$XDG_CONFIG_HOME` do
+  app, nega rede `inet`/`inet6` (só `unix` e `netlink`, já que o app é
+  offline) e nega execução de qualquer binário fora da lista curta do pacote
+  (`chrome-sandbox`, `chrome_crashpad_handler`) e dos dois helpers do sistema
+  (`pkexec`, `xdg-open`). Validado em `enforce` com zero negações de operação
+  legítima no ciclo de vida completo do app.
 
 ## Riscos aceitos (com justificativa)
 
@@ -102,6 +112,30 @@ contrário).
   moderno; senha mestra (24 caracteres) e frase (12+ palavras) têm entropia
   própria e ficam em 128 MB / t=3. O PIN de 8 dígitos continua sendo o limite
   aceito desse cofre.
+- **A trava exponencial protege contra o app, não contra o disco**: o campo
+  `attempts` do `vault.zkv` mora num arquivo com dono usuário, então quem já
+  tenha o arquivo pode zerá-lo e chutar à vontade. A trava serve para conter
+  tentativas pela interface do app (e recusa a espera sem nem chegar a rodar o
+  Argon2); a defesa real contra atacante com o arquivo e tempo ilimitado é o
+  custo do Argon2id, medido em ~2,1 s por chute de PIN num desktop modesto.
+  Nada a mudar no código: trava online mais KDF caro é o modelo correto, e a
+  trava não é considerada barreira de segurança contra leitura do disco.
+- **Chave em memória enquanto o cofre está aberto**: com o cofre destravado,
+  qualquer código rodando como o mesmo usuário lê `/proc/<pid>/mem` e
+  recupera a chave de 32 bytes. Inerente a aplicativo desktop com cofre local
+  (não há TPM nem cofre de hardware no alvo). Mitigado por zerar a chave no
+  lock manual e no auto-lock de 5 minutos, o que limita a janela de exposição;
+  rodar como outro usuário já está fora do escopo (abaixo).
+- **`/usr/bin/xdg-open` sai do confinamento**: para `shell.openExternal` (o
+  botão que abre o domínio da credencial no navegador) funcionar, o perfil
+  concede `ux` ao abridor do sistema: a cadeia inteira (shell, `gio`,
+  `gio-launch-desktop` e o navegador) roda sem confinamento depois da execução.
+  Sem isso o wrapper do navegador é negado e o recurso quebra. O que isso
+  entrega a um atacante que já rode dentro do app é abrir um endereço ou um
+  tipo de arquivo já registrado no sistema (o mesmo que o próprio app faz);
+  não há como criar o handler pelo perfil, pois escrever em
+  `~/.local/share/applications` continua negado. Aceito por ser o único caminho
+  suportado para abrir URLs no Linux sem reescrever o mecanismo do sistema.
 - **`GUARDINHA_VAULT_DIR` / `GUARDINHA_VAR_LIB`**: variáveis de ambiente
   redirecionam o cofre (usadas por testes e `npm run dev`). Quem controla o
   ambiente do processo do usuário já está no mesmo nível de ameaça que a chave

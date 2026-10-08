@@ -19,6 +19,8 @@ quem precisa mexer no código saber onde cada medida mora e o que ela protege.
 | Id de arquivo seguro (path traversal, CVE-2026-21589) | `src/main/storage.ts` (`assertSafeEntryId`)                               |
 | Raiz `/var/lib/.guardinha` com `root:root 0711`       | `build/scripts/after-install.sh`                                          |
 | Senha de administrador fora do app (PolicyKit)        | `src/main/privilege.ts`, `build/scripts/guardinha-setup`                  |
+| Confinamento AppArmor do processo instalado           | `build/apparmor-profile`, `build/scripts/after-install.sh`                |
+| Declaração do perfil no empacotamento                 | `package.json` (bloco `build.deb.appArmorProfile`)                        |
 | Guarda de origem em todo canal IPC                    | `src/main/index.ts` (`assertAppFrame`)                                    |
 | Navegação presa, `window.open` e permissões da sessão | `src/main/index.ts`                                                       |
 | Renderer servido por `guardinha://`                   | `src/main/index.ts` (`registerAppProtocol`)                               |
@@ -49,6 +51,10 @@ a chave do cofre é exigida pelas funções de domínio (`requireSessionKey`).
 - Validação de força no `main`: o medidor do renderer é só aviso.
 - Parâmetros do Argon2id dentro de `KDF_LIMITS` (escrita e leitura).
 - Manifesto antes de listar, salvar ou remover credencial.
+- `build/apparmor-profile` não pode voltar a `flags=(unconfined)`: o perfil só
+  vale alguma coisa se for restritivo, e cada regra nova ali precisa de teste
+  em `enforce` (negação legítima em `/var/log/kern.log` é sinal de que faltou
+  regra, não de que a regra deva ser removida).
 - Nenhum `console` com senha, PIN ou frase; nenhum log de payload IPC.
 
 Qualquer mudança nesses pontos muda também o `SECURITY.md` e costuma pedir
