@@ -2,6 +2,8 @@ import {
   deriveKey,
   decryptRecord,
   encryptRecord,
+  isSameKdf,
+  kdfProfileFor,
   normalizeRecoveryPhrase,
   randomBytes,
   RECOVERY_MIN_WORDS,
@@ -26,7 +28,7 @@ import {
 import { setupVaultDirectory } from '@zero/main/privilege';
 import { sealManifest } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
-import type { VaultContainerData, WrappedMethod } from '@zero/main/container';
+import type { VaultContainerData, VaultKdfParams, WrappedMethod } from '@zero/main/container';
 import type { PersistedAuthState } from '@zero/main/storage';
 import type {
   CreateVaultInput,
@@ -40,12 +42,14 @@ import type {
 /** Trava automática após 5 minutos sem operação no cofre. */
 const IDLE_LOCK_MS = 5 * 60 * 1000;
 
-const KDF_PARAMS = {
-  algo: 'argon2id',
-  memoryKiB: 65536,
-  iterations: 3,
-  parallelism: 4,
-} as const;
+/**
+ * Custo do Argon2id para um método de desbloqueio: o PIN de 8 dígitos é o
+ * segredo fraco (10^8 candidatas offline) e por isso recebe o perfil mais caro;
+ * senha mestra e frase de recuperação têm entropia própria, um nível abaixo.
+ */
+function kdfFor(kind: UnlockKind | 'recovery'): VaultKdfParams {
+  return { algo: 'argon2id', ...kdfProfileFor(kind) };
+}
 
 /** Chave do cofre em memória; só existe com o cofre desbloqueado. */
 let sessionKey: Buffer | null = null;
@@ -110,12 +114,40 @@ function fail(error: string): VaultResult {
   return { ok: false, error, status: getStatus() };
 }
 
-async function wrapKey(vaultKey: Buffer, credential: string): Promise<WrappedMethod> {
+async function wrapKey(
+  vaultKey: Buffer,
+  credential: string,
+  kdf: VaultKdfParams,
+): Promise<WrappedMethod> {
   const kdfSalt = randomBytes(16);
-  const derived = await deriveKey(credential, kdfSalt);
+  const derived = await deriveKey(credential, kdfSalt, kdf);
   const payload = encryptRecord({ key: vaultKey.toString('hex') }, derived);
   derived.fill(0);
-  return { kdfSalt: kdfSalt.toString('hex'), payload };
+  return { kdf, kdfSalt: kdfSalt.toString('hex'), payload };
+}
+
+/**
+ * Migração incremental do custo do Argon2id: reembrulha o método recém-usado
+ * com o perfil atual se o gravado for mais fraco. Só quem detém a credencial
+ * consegue reembrulhar, então cada método sobe no próprio desbloqueio (um
+ * cofre v2 vai a v3 aos poucos). Best-effort: sem permissão de escrita agora a
+ * migração espera a próxima desbloqueada, sem derrubar o desbloqueio.
+ */
+async function upgradeMethod(
+  container: VaultContainerData,
+  kind: UnlockKind,
+  credential: string,
+  vaultKey: Buffer,
+): Promise<void> {
+  const target = kdfFor(kind);
+  const current = container.methods[kind];
+  if (current === undefined || isSameKdf(current.kdf, target)) return;
+  try {
+    container.methods[kind] = await wrapKey(vaultKey, credential, target);
+    writeVaultContainer(container);
+  } catch {
+    // escrita indisponível (ex.: sem sudo em /var/lib); tenta na próxima vez
+  }
 }
 
 /** Cria o cofre com frase de recuperação escrita pelo próprio usuário. */
@@ -156,14 +188,15 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
   const vaultKey = createVaultKey();
 
   const methods: VaultContainerData['methods'] = {
-    master: await wrapKey(vaultKey, input.masterPassword),
-    pin: await wrapKey(vaultKey, input.pin),
-    recovery: await wrapKey(vaultKey, recoveryPhrase),
+    master: await wrapKey(vaultKey, input.masterPassword, kdfFor('master')),
+    pin: await wrapKey(vaultKey, input.pin, kdfFor('pin')),
+    recovery: await wrapKey(vaultKey, recoveryPhrase, kdfFor('recovery')),
   };
 
   const container: VaultContainerData = {
     createdAt: Date.now(),
-    kdf: KDF_PARAMS,
+    // informativo (v3 guarda o custo por método): o perfil mais caro do cofre
+    kdf: kdfFor('pin'),
     attempts: 0,
     lockUntil: null,
     methods,
@@ -202,15 +235,22 @@ export async function unlock(input: UnlockInput): Promise<VaultResult> {
   }
 
   try {
-    const derived = await deriveKey(input.credential, Buffer.from(method.kdfSalt, 'hex'));
+    const derived = await deriveKey(
+      input.credential,
+      Buffer.from(method.kdfSalt, 'hex'),
+      method.kdf,
+    );
     const unwrapped = decryptRecord(method.payload, derived);
     derived.fill(0);
     if (!('key' in unwrapped) || typeof unwrapped.key !== 'string' || unwrapped.key.length !== 64) {
       throw new Error('container corrompido');
     }
 
+    const vaultKey = Buffer.from(unwrapped.key, 'hex');
+    await upgradeMethod(container, input.kind, input.credential, vaultKey);
+
     lock();
-    sessionKey = Buffer.from(unwrapped.key, 'hex');
+    sessionKey = vaultKey;
     initManifest(sessionKey);
     resetAttempts();
     touch();
@@ -242,7 +282,7 @@ export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
   try {
     const phrase = normalizeRecoveryPhrase(input.phrase);
     if (phrase.split(' ').length < RECOVERY_MIN_WORDS) throw new Error('frase curta');
-    const derived = await deriveKey(phrase, Buffer.from(method.kdfSalt, 'hex'));
+    const derived = await deriveKey(phrase, Buffer.from(method.kdfSalt, 'hex'), method.kdf);
     const unwrapped = decryptRecord(method.payload, derived);
     derived.fill(0);
     if (!('key' in unwrapped) || typeof unwrapped.key !== 'string' || unwrapped.key.length !== 64) {
@@ -250,7 +290,12 @@ export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
     }
 
     const vaultKey = Buffer.from(unwrapped.key, 'hex');
-    container.methods.pin = await wrapKey(vaultKey, input.newPin);
+    container.methods.pin = await wrapKey(vaultKey, input.newPin, kdfFor('pin'));
+    // a frase está na mão: aproveita para subir o custo do método de recuperação
+    const recovery = container.methods.recovery;
+    if (recovery !== undefined && !isSameKdf(recovery.kdf, kdfFor('recovery'))) {
+      container.methods.recovery = await wrapKey(vaultKey, phrase, kdfFor('recovery'));
+    }
     writeVaultContainer(container);
 
     lock();

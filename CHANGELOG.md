@@ -18,6 +18,22 @@ em português do Brasil.
   **Atribuições** e **Configurações**; o item "Configuração & Gerador" virou
   "Gerador de Senhas", também no título da tela.
 
+### Segurança
+
+- `vault.zkv` passa à **versão 3**: cada método de desbloqueio guarda o próprio
+  custo do Argon2id — **PIN de 8 dígitos com 256 MB / t=4 / p=4** (o segredo
+  fraco, o mais caro) e **senha mestra / frase de recuperação com 128 MB /
+  t=3 / p=4** (antes 64 MB / t=3 para todos). Cofres na versão 2 continuam
+  legíveis e cada método é reembrulhado com o custo atual no desbloqueio em que
+  a credencial dele é usada (migração incremental: só quem tem a credencial
+  consegue reembrulhar).
+- Parâmetros KDF fora de uma faixa segura agora são recusados na leitura e na
+  gravação do container (fail-closed), para um arquivo adulterado não conseguir
+  exigir memória ou CPU ilimitadas do app.
+- Custo maior por tentativa: no hardware de referência (i7 antigo) o
+  desbloqueio com PIN passou de ~0,4 s para ~2 s e a senha mestra / frase de
+  ~0,4 s para ~0,8 s; criar o cofre também fica mais lento.
+
 ## [1.1.0] - 2026-10-07
 
 ### Segurança

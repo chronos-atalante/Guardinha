@@ -111,8 +111,12 @@ Camadas:
   `registerAppProtocol` (substitui `file://`); todo handler IPC valida
   `event.senderFrame` com `assertAppFrame`. Fuses de segurança no electron-
   builder via chave `electronFuses`.
-- Argon2id com 64 MB / t=3 / p=4 e AES-256-GCM por arquivo: mudar parâmetros
-  exige migrar o `vault.zkv` (versão `2`) e converter entradas legadas.
+- Argon2id com custo por método de desbloqueio (PIN de 8 dígitos: 256 MB /
+  t=4 / p=4; senha mestra e frase de recuperação: 128 MB / t=3 / p=4) e
+  AES-256-GCM por arquivo: mudar parâmetros exige migrar o `vault.zkv` (hoje
+  versão `3`, com o KDF de cada método dentro do container; a versão `2` ainda é
+  lida e cada método é reembrulhado com o custo atual no próprio desbloqueio —
+  só quem tem a credencial consegue) e converter entradas legadas.
 - `.deb` e `out/` nunca entram no git.
 
 ## Documentação

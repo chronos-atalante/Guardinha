@@ -3,9 +3,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { resetAttempts } from '@zero/main/auth';
+import { KDF_CREDENTIAL, KDF_PIN, deriveKey, encryptRecord, randomBytes } from '@zero/main/crypto';
 import { currentMessages } from '@zero/main/i18n';
 import { listEntries, removeEntry, saveEntry } from '@zero/main/entries';
-import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
+import { readVaultContainer, writeVaultContainer } from '@zero/main/storage';
+import {
+  createVault,
+  getStatus,
+  lock,
+  requireSessionKey,
+  resetPin,
+  unlock,
+} from '@zero/main/vault';
+import type { VaultKdfParams } from '@zero/main/container';
 
 const MASTER = 'senha-mestra-guardinha24';
 const PIN = '49201733';
@@ -25,6 +35,13 @@ describe('ciclo de vida do cofre (integração)', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.status).toMatchObject({ exists: true, locked: false, attempts: 0 });
+
+    // cada método nasce com o custo do Argon2id adequado ao segredo (v3)
+    const container = readVaultContainer();
+    expect(container?.methods.pin?.kdf).toMatchObject(KDF_PIN);
+    expect(container?.methods.master?.kdf).toMatchObject(KDF_CREDENTIAL);
+    expect(container?.methods.recovery?.kdf).toMatchObject(KDF_CREDENTIAL);
+    expect(container?.methods.pin?.kdf).not.toEqual(container?.methods.master?.kdf);
   });
 
   it('2. recusa recriar um cofre existente', async () => {
@@ -208,5 +225,33 @@ describe('ciclo de vida do cofre (integração)', () => {
     // remoção externa do arquivo da credencial → manifesto acusa
     fs.rmSync(path.join(entriesDir, `${id}.zke`));
     expect(() => listEntries()).toThrow(tampered);
+  });
+
+  it('10. sobe o custo do Argon2id no desbloqueio seguinte (migração do cofre)', async () => {
+    resetAttempts();
+    const vaultKey = requireSessionKey();
+
+    // simula um cofre gravado com o custo antigo (64 MiB, t=3, p=4)
+    const oldKdf: VaultKdfParams = {
+      algo: 'argon2id',
+      memoryKiB: 65_536,
+      iterations: 3,
+      parallelism: 4,
+    };
+    const kdfSalt = randomBytes(16);
+    const derived = await deriveKey(PIN, kdfSalt, oldKdf);
+    const payload = encryptRecord({ key: vaultKey.toString('hex') }, derived);
+
+    const container = readVaultContainer();
+    if (container === null) throw new Error('container sumiu');
+    container.methods.pin = { kdf: oldKdf, kdfSalt: kdfSalt.toString('hex'), payload };
+    writeVaultContainer(container);
+    expect(readVaultContainer()?.methods.pin?.kdf).toMatchObject(oldKdf);
+
+    const unlocked = await unlock({ credential: PIN, kind: 'pin' });
+    expect(unlocked.ok).toBe(true);
+    expect(readVaultContainer()?.methods.pin?.kdf).toMatchObject(KDF_PIN);
+    // os outros métodos só sobem quando a própria credencial for usada
+    expect(readVaultContainer()?.methods.master?.kdf).toMatchObject(KDF_CREDENTIAL);
   });
 });

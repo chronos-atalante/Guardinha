@@ -25,7 +25,9 @@ distribuição em **`.deb`**.
 - **Acesso**: login só com **PIN**; a senha mestra é oferecida como opção
   apenas **após 3 falhas** de PIN; a frase de recuperação **não é forma de
   login**; serve exclusivamente para redefinir o PIN esquecido.
-- **Criptografia**: Argon2id (64 MB, t=3, p=4) na derivação de chave e
+- **Criptografia**: Argon2id com custo definido por credencial — **PIN de 8
+  dígitos** com 256 MB / t=4 / p=4 (o segredo fraco, e por isso o mais caro) e
+  **senha mestra / frase de recuperação** com 128 MB / t=3 / p=4 — e
   **AES-256-GCM por registro** (`entries/<uuid>.zke`), com salt e IV de 128 bits
   gerados por hardware e chave por arquivo via HKDF-SHA512.
 - **Trava exponencial**: 10 s → 30 s → 1 min → 1 h → 24 h por tentativa errada,
