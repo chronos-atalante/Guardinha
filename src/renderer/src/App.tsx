@@ -30,7 +30,7 @@ function Shell({ status, language, onLanguageChange, onRefresh }: ShellProps): J
 
   if (status === null) {
     return (
-      <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm text-slate-400">
+      <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center text-sm">
         {m.app.checkingVault}
       </div>
     );
