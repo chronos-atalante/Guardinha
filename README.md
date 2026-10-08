@@ -30,8 +30,8 @@ distribuição em **`.deb`**.
   gerados por hardware e chave por arquivo via HKDF-SHA512.
 - **Trava exponencial**: 10 s → 30 s → 1 min → 1 h → 24 h por tentativa errada,
   persistida em disco; auto-lock após 5 minutos ocioso.
-- **Interface** em coluna com Sidebar (Início, Configuração & Gerador,
-  Atribuições), busca, copiar usuário/senha, botão de globo que **abre o site
+- **Interface** em coluna com Sidebar (Início, Gerador de Senhas, Atribuições,
+  Configurações), busca, copiar usuário/senha, botão de globo que **abre o site
   da credencial no navegador**, gerador de senhas com slider de tamanho,
   injeção de 5 gostos pessoais e pós-créditos de cinema.
 - **Idioma**: pt-BR (canônico) e inglês; todos os textos em `src/messages/`

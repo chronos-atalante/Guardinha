@@ -101,13 +101,25 @@ describe('App', () => {
     render(<App />);
     await screen.findByRole('button', { name: 'Início (Senhas)' });
 
-    await user.click(screen.getByRole('button', { name: 'Configuração & Gerador' }));
-    expect(
-      await screen.findByRole('heading', { name: 'Configuração & Gerador de Senhas' }),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Gerador de Senhas' }));
+    expect(await screen.findByRole('heading', { name: 'Gerador de Senhas' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Gerar Senha Criptográfica' }));
     expect(await screen.findByText('senha-gerada-123')).toBeInTheDocument();
+  });
+
+  it('abre a tela de configurações com o aviso de implementação futura', async () => {
+    const user = userEvent.setup();
+    installApi(UNLOCKED, []);
+
+    render(<App />);
+    await screen.findByRole('button', { name: 'Início (Senhas)' });
+
+    await user.click(screen.getByRole('button', { name: 'Configurações' }));
+    expect(await screen.findByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em breve' })).toBeInTheDocument();
+    expect(screen.getByText(/serão implementadas em uma versão futura/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Idioma' })).toBeInTheDocument();
   });
 
   it('exibe a tela de criação quando não existe cofre', async () => {

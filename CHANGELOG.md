@@ -4,6 +4,20 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [Não lançado]
+
+### Adicionado
+
+- Aba **Configurações** na sidebar, logo abaixo de Atribuições: por ora mostra
+  apenas o aviso de que as configurações serão implementadas em uma versão
+  futura (idioma e bloqueio do cofre continuam na barra lateral).
+
+### Alterado
+
+- Sidebar reordenada e renomeada: **Início (Senhas)**, **Gerador de Senhas**,
+  **Atribuições** e **Configurações**; o item "Configuração & Gerador" virou
+  "Gerador de Senhas", também no título da tela.
+
 ## [1.1.0] - 2026-10-07
 
 ### Segurança

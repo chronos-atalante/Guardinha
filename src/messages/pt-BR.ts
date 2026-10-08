@@ -31,8 +31,9 @@ export const ptBR = {
     statusLocal: '100% Local / Criptografado',
     nav: {
       home: 'Início (Senhas)',
-      config: 'Configuração & Gerador',
+      generator: 'Gerador de Senhas',
       credits: 'Atribuições',
+      settings: 'Configurações',
     },
     lock: 'Bloquear cofre',
     lockTitle: 'Bloqueia o cofre agora',
@@ -129,7 +130,7 @@ export const ptBR = {
   },
 
   generator: {
-    title: 'Configuração & Gerador de Senhas',
+    title: 'Gerador de Senhas',
     subtitle: 'Ajuste o tamanho (0 a 72) e injete gostos pessoais para alta entropia.',
     lengthLabel: 'Tamanho da Senha',
     lengthValue: (n: number): string => `${n} caracteres`,
@@ -148,6 +149,14 @@ export const ptBR = {
     title: 'ATRIBUIÇÕES',
     footer: '© 2026, Proteção de Dados 100% Offline & Local',
     loopHint: 'Os créditos voltam ao início em loop.',
+  },
+
+  settings: {
+    title: 'Configurações',
+    emptyTitle: 'Em breve',
+    emptyText:
+      'As configurações do Guardinha serão implementadas em uma versão futura. ' +
+      'Enquanto isso, o idioma e o bloqueio do cofre continuam aqui na barra lateral.',
   },
 
   /** Erros emitidos pelo processo main (já localizados no momento da emissão). */

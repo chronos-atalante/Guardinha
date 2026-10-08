@@ -26,8 +26,9 @@ export const en: Messages = {
     statusLocal: '100% Local / Encrypted',
     nav: {
       home: 'Home (Passwords)',
-      config: 'Settings & Generator',
+      generator: 'Password Generator',
       credits: 'Attributions',
+      settings: 'Settings',
     },
     lock: 'Lock vault',
     lockTitle: 'Lock the vault now',
@@ -125,7 +126,7 @@ export const en: Messages = {
   },
 
   generator: {
-    title: 'Settings & Password Generator',
+    title: 'Password Generator',
     subtitle: 'Adjust the length (0 to 72) and inject personal taste for high entropy.',
     lengthLabel: 'Password length',
     lengthValue: (n: number): string => `${n} characters`,
@@ -144,6 +145,14 @@ export const en: Messages = {
     title: 'ATTRIBUTIONS',
     footer: '© 2026, 100% Offline & Local Data Protection',
     loopHint: 'The credits loop back to the start.',
+  },
+
+  settings: {
+    title: 'Settings',
+    emptyTitle: 'Coming soon',
+    emptyText:
+      'Guardinha settings will be implemented in a future release. ' +
+      'In the meantime, language and vault lock stay in the sidebar.',
   },
 
   errors: {

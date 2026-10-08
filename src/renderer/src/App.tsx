@@ -6,6 +6,7 @@ import type { TabType } from '@zero/renderer/components/Sidebar';
 import { Home } from '@zero/renderer/components/Home';
 import { Generator } from '@zero/renderer/components/Generator';
 import { Credits } from '@zero/renderer/components/Credits';
+import { Settings } from '@zero/renderer/components/Settings';
 import { AuthModal } from '@zero/renderer/components/AuthModal';
 import { Toast } from '@zero/renderer/components/Toast';
 import type { Language, VaultStatus } from '@zero/types';
@@ -53,8 +54,9 @@ function Shell({ status, language, onLanguageChange, onRefresh }: ShellProps): J
       />
       <main className="flex-1 bg-slate-950 overflow-y-auto p-8">
         {activeTab === 'home' && <Home onToast={setToast} />}
-        {activeTab === 'config' && <Generator onToast={setToast} />}
+        {activeTab === 'generator' && <Generator onToast={setToast} />}
         {activeTab === 'credits' && <Credits />}
+        {activeTab === 'settings' && <Settings />}
       </main>
       <Toast message={toast} onClose={() => setToast(null)} />
     </div>
