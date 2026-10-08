@@ -22,7 +22,7 @@ export const en: Messages = {
 
   app: {
     name: 'Guardinha',
-    subtitle: 'Mint 22.X Vault',
+    subtitle: 'Otaku Delirante',
     statusLocal: '100% Local / Encrypted',
     nav: {
       home: 'Home (Passwords)',

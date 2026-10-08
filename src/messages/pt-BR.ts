@@ -27,7 +27,7 @@ export const ptBR = {
 
   app: {
     name: 'Guardinha',
-    subtitle: 'Cofre do Mint 22.X',
+    subtitle: 'Otaku Delirante',
     statusLocal: '100% Local / Criptografado',
     nav: {
       home: 'Início (Senhas)',
