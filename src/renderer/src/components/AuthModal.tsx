@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react';
 import type { JSX, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { ArrowLeft, Hash, KeyRound, Lock, ShieldCheck, Sparkles } from 'lucide-react';
 import { richText, useMessages } from '@zero/renderer/i18n';
+import {
+  countWords,
+  errorMessage,
+  formatCountdown,
+  normalizePhrase,
+} from '@zero/renderer/formatters';
+import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
+import { evaluateMaster, evaluatePhrase, evaluatePin } from '@zero/shared';
 import type { VaultStatus } from '@zero/types';
 
 interface AuthModalProps {
@@ -15,34 +23,6 @@ interface AuthModalProps {
  * de `@zero/main/crypto`; o renderer não importa módulos do main).
  */
 const RECOVERY_MIN_WORDS = 12;
-
-function countWords(text: string): number {
-  return text
-    .trim()
-    .split(/\s+/)
-    .filter((word) => word !== '').length;
-}
-
-/** Mesma normalização do main: minúsculas e espaços simples. */
-function normalizePhrase(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((word) => word !== '')
-    .join(' ');
-}
-
-function formatCountdown(ms: number): string {
-  const total = Math.ceil(ms / 1000);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message !== '' ? error.message : fallback;
-}
 
 export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
   const m = useMessages();
@@ -95,12 +75,20 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
       setError(m.auth.masterLength(24, master.length));
       return;
     }
+    if (evaluateMaster(master).blocked) {
+      setError(m.errors.trivialMaster);
+      return;
+    }
     if (master !== masterConfirm) {
       setError(m.auth.masterMismatch);
       return;
     }
     if (!/^\d{8}$/.test(pin)) {
       setError(m.auth.pinInvalid);
+      return;
+    }
+    if (evaluatePin(pin).blocked) {
+      setError(m.errors.trivialPin);
       return;
     }
     setStep('recovery');
@@ -111,6 +99,10 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
     const words = countWords(phrase);
     if (words < RECOVERY_MIN_WORDS) {
       setError(m.auth.recoveryTooShort(RECOVERY_MIN_WORDS, words));
+      return;
+    }
+    if (evaluatePhrase(phrase).blocked) {
+      setError(m.errors.trivialPhrase);
       return;
     }
     if (normalizePhrase(phrase) !== normalizePhrase(phraseConfirm)) {
@@ -171,6 +163,10 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
     }
     if (!/^\d{8}$/.test(newPin)) {
       setError(m.auth.pinInvalid);
+      return;
+    }
+    if (evaluatePin(newPin).blocked) {
+      setError(m.errors.trivialPin);
       return;
     }
     if (newPin !== newPinConfirm) {
@@ -246,6 +242,9 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
               className={inputClass}
             />
           </label>
+          {master !== '' && (
+            <StrengthMeter result={evaluateMaster(master)} hint={m.strength.hintMaster} />
+          )}
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-slate-300">{m.auth.masterConfirmLabel}</span>
             <input
@@ -267,6 +266,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
               className={inputClass}
             />
           </label>
+          {pin !== '' && <StrengthMeter result={evaluatePin(pin)} hint={m.strength.hintPin} />}
           <p className="text-xs text-slate-500">{m.auth.pinSubtitle}</p>
           {error !== null && <p className="text-xs text-rose-400">{error}</p>}
           <button
@@ -295,6 +295,9 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
             className={`${inputClass} resize-none`}
           />
         </label>
+        {phrase !== '' && (
+          <StrengthMeter result={evaluatePhrase(phrase)} hint={m.strength.hintPhrase} />
+        )}
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-300">{m.auth.recoveryConfirmLabel}</span>
           <textarea
@@ -364,6 +367,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
             className={inputClass}
           />
         </label>
+        {newPin !== '' && <StrengthMeter result={evaluatePin(newPin)} hint={m.strength.hintPin} />}
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-300">{m.auth.newPinConfirmLabel}</span>
           <input

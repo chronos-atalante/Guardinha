@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
 const aliases = {
   '@zero/types': resolve(import.meta.dirname, 'src/types'),
   '@zero/messages': resolve(import.meta.dirname, 'src/messages'),
+  '@zero/shared': resolve(import.meta.dirname, 'src/shared'),
   '@zero/main': resolve(import.meta.dirname, 'src/main'),
   '@zero/preload': resolve(import.meta.dirname, 'src/preload'),
   '@zero/renderer': resolve(import.meta.dirname, 'src/renderer/src'),
@@ -24,8 +25,8 @@ export default defineConfig({
     environment: 'jsdom',
     pool: 'forks',
     clearMocks: false,
-    // Argon2id real (64 MB, t=3) roda em deguardinhas de testes: sob carga o KDF
-    // passa de 5 s e o limite padrão do Vitest vira falso positivo.
+    // Argon2id real (128 MB, t=3 e 256 MB, t=4) roda nos testes de cofre: sob
+    // carga o KDF passa de 5 s e o limite padrão do Vitest vira falso positivo.
     testTimeout: 30_000,
     setupFiles: ['tests/setup-env.ts', 'tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],

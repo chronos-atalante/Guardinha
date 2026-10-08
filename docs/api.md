@@ -13,21 +13,26 @@ lógica de domínio, exigindo `event.senderFrame` apontando para a página
 oficial do app (scheme `guardinha://` em produção ou dev server do Vite em
 dev); uma mensagem de emissor desconhecido é bloqueada com erro.
 
+Entradas são validadas no main, nunca só na tela: comprimento da senha mestra
+(24), do PIN (8 dígitos) e da frase (12+ palavras), forma de usuário/domínio,
+UUID de credencial e, na criação e na redefinição de PIN, a força da
+credencial (`credenciais.md`).
+
 ## `window.api.vault`
 
-| Método            | Canal            | Payload → retorno                | Descrição                                                                                         |
-| ----------------- | ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `status()`        | `vault:status`   | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                   |
-| `create(input)`   | `vault:create`   | `CreateVaultInput → VaultResult` | Cria o cofre em `/var/lib/.guardinha/.vault/` com frase **escrita pelo usuário** (≥ 12 palavras). |
-| `unlock(input)`   | `vault:unlock`   | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN.    |
-| `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).           |
-| `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                               |
+| Método            | Canal            | Payload → retorno                | Descrição                                                                                                                 |
+| ----------------- | ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `status()`        | `vault:status`   | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                                           |
+| `create(input)`   | `vault:create`   | `CreateVaultInput → VaultResult` | Cria o cofre em `/var/lib/.guardinha/.vault/` com frase **escrita pelo usuário** (≥ 12 palavras); valida formato e força. |
+| `unlock(input)`   | `vault:unlock`   | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN.                            |
+| `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).                                   |
+| `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                                                       |
 
 ## `window.api.openDomain`
 
-| Método                | Canal               | Payload → retorno | Descrição                                                                                   |
-| --------------------- | ------------------- | ----------------- | ------------------------------------------------------------------------------------------- |
-| `openDomain(domínio)` | `shell:open-domain` | `string → void`   | Abre o domínio da credencial no navegador padrão (`shell.openExternal`; só `http`/`https`). |
+| Método               | Canal               | Payload → retorno | Descrição                                                                                   |
+| -------------------- | ------------------- | ----------------- | ------------------------------------------------------------------------------------------- |
+| `openDomain(domain)` | `shell:open-domain` | `string → void`   | Abre o domínio da credencial no navegador padrão (`shell.openExternal`; só `http`/`https`). |
 
 ## `window.api.entries`
 
@@ -39,9 +44,9 @@ dev); uma mensagem de emissor desconhecido é bloqueada com erro.
 
 ## `window.api.generator`
 
-| Método              | Canal                | Payload → retorno           | Descrição                                            |
-| ------------------- | -------------------- | --------------------------- | ---------------------------------------------------- |
-| `generate(options)` | `generator:generate` | `GeneratorOptions → string` | Senha de 0 a 72 caracteres com os 5 gostos pessoais. |
+| Método              | Canal                | Payload → retorno           | Descrição                                                                                      |
+| ------------------- | -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| `generate(options)` | `generator:generate` | `GeneratorOptions → string` | Senha de 0 a 72 caracteres, com maiúsculas, números, símbolos e entropia pessoal (5 palavras). |
 
 ## `window.api.settings`
 

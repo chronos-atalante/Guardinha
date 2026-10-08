@@ -8,7 +8,7 @@
 //   sem WebGL.
 //
 // NUNCA remover libffmpeg.so: o binário do Electron declara DT_NEEDED nele,
-// então o loader exige o arquivo na hora do exec — sem ele o app morre
+// então o loader exige o arquivo na hora do exec; sem ele o app morre
 // instantaneamente ("error while loading shared libraries: libffmpeg.so")
 // mesmo o app não usando áudio/vídeo.
 //

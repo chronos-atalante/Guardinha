@@ -26,6 +26,7 @@ import {
   writeVaultContainer,
 } from '@zero/main/storage';
 import { setupVaultDirectory } from '@zero/main/privilege';
+import { evaluateMaster, evaluatePhrase, evaluatePin } from '@zero/shared';
 import { sealManifest } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
 import type { VaultContainerData, VaultKdfParams, WrappedMethod } from '@zero/main/container';
@@ -156,12 +157,22 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
   if (!validateMasterPasswordFormat(input.masterPassword)) {
     return { ok: false, error: m.errors.invalidMasterLength, status: getStatus() };
   }
+  // revalida a força aqui: o renderer é conveniência, não é fronteira de segurança
+  if (evaluateMaster(input.masterPassword).blocked) {
+    return { ok: false, error: m.errors.trivialMaster, status: getStatus() };
+  }
   if (!validatePinFormat(input.pin)) {
     return { ok: false, error: m.errors.invalidPin, status: getStatus() };
+  }
+  if (evaluatePin(input.pin).blocked) {
+    return { ok: false, error: m.errors.trivialPin, status: getStatus() };
   }
   const recoveryPhrase = normalizeRecoveryPhrase(input.recoveryPhrase);
   if (recoveryPhrase.split(' ').length < RECOVERY_MIN_WORDS) {
     return { ok: false, error: m.errors.invalidRecovery, status: getStatus() };
+  }
+  if (evaluatePhrase(recoveryPhrase).blocked) {
+    return { ok: false, error: m.errors.trivialPhrase, status: getStatus() };
   }
   if (vaultExists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
 
@@ -275,6 +286,7 @@ export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
     return fail(m.auth.lockout(formatCountdown(locked)));
   }
   if (!validatePinFormat(input.newPin)) return fail(m.errors.invalidPin);
+  if (evaluatePin(input.newPin).blocked) return fail(m.errors.trivialPin);
 
   const method = container.methods.recovery;
   if (method === undefined) return fail(m.errors.wrongRecovery);

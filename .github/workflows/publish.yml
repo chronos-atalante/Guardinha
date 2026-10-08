@@ -2,13 +2,13 @@ name: Publicar .deb
 
 # Publica o .deb na GitHub Release correspondente e, junto, o repositório
 # APT flat (índices assinados + alias estável do .deb) como assets da mesma
-# Release — base: .../releases/latest/download/ (suite ./).
+# Release, base: .../releases/latest/download/ (suite ./).
 # Gatilhos:
 # - push na main: lê package.json → se ainda não existir Release para
 #   v<versão>, publica automaticamente (é assim que a versão nova sai);
 # - tag v* enviada manualmente (ex.: git push origin v1.0.1), ou
 # - Release criada na UI do GitHub, ou
-# - execução manual na UI (workflow_dispatch — também serve para reanexar
+# - execução manual na UI (workflow_dispatch, que também serve para reanexar
 #   assets de uma Release que falhou no meio).
 # Sem loop: pushes de tag/Release feitos com o GITHUB_TOKEN desta execução
 # não disparam novos runs, e a tag só é criada antes do upload dos assets.
@@ -84,7 +84,7 @@ jobs:
           fi
 
           # Push na main: só interessa publicar se ainda não houver Release.
-          # (Se a tag existe mas a Release não, publica mesmo assim — é o
+          # (Se a tag existe mas a Release não, publica mesmo assim: é o
           # caso de um run anterior que morreu antes do upload.)
           if [ "$EVENT_NAME" = "push" ] && [ "$REF_TYPE" = "branch" ]; then
             CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
@@ -93,9 +93,9 @@ jobs:
               "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" || true)"
             if [ "$CODE" = "200" ]; then
               PUBLICAR=false
-              echo "::notice::Release $TAG já existe — nada a publicar nesta execução."
+              echo "::notice::Release $TAG já existe; nada a publicar nesta execução."
             elif [ "$CODE" != "404" ]; then
-              echo "::warning::Não deu para conferir a Release $TAG (HTTP ${CODE:-erro}) — seguirei publicando."
+              echo "::warning::Não deu para conferir a Release $TAG (HTTP ${CODE:-erro}); seguirei publicando."
             fi
           fi
 
@@ -135,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$TAG" ]; then
-            echo "::error::Tag vazia — o job 'Verificar versão' não rodou?"
+            echo "::error::Tag vazia: o job 'Verificar versão' não rodou?"
             exit 1
           fi
           # Identidade do autor: sem user.name/user.email no runner o
@@ -143,7 +143,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-            echo "Tag $TAG já existe — vou anexar os assets nela."
+            echo "Tag $TAG já existe; vou anexar os assets nela."
           else
             git tag -a "$TAG" -m "Release $TAG"
             git push origin "refs/tags/$TAG"
@@ -177,7 +177,7 @@ jobs:
           # na UI do Actions sem precisar abrir o log cru).
           printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import || true
           if ! gpg --list-secret-keys F2B0A3843C9FF986 >/dev/null 2>&1; then
-            echo "::error::GPG_PRIVATE_KEY inválido ou incompleto — cole o bloco inteiro do arquivo, COM as linhas -----BEGIN PGP PRIVATE KEY BLOCK----- e -----END PGP PRIVATE KEY BLOCK----- (sem elas o gpg não reconhece o formato)."
+            echo "::error::GPG_PRIVATE_KEY inválido ou incompleto: cole o bloco inteiro do arquivo, COM as linhas -----BEGIN PGP PRIVATE KEY BLOCK----- e -----END PGP PRIVATE KEY BLOCK----- (sem elas o gpg não reconhece o formato)."
             exit 1
           fi
           if [ -n "${GPG_PASSPHRASE:-}" ]; then
@@ -186,7 +186,7 @@ jobs:
             GPG_OPTS=(--batch --yes)
           fi
           # Teste de assinatura antes de gerar nada: falha = passphrase errada
-          # (ou secret GPG_PASSPHRASE ausente — no CI não há pinentry).
+          # (ou secret GPG_PASSPHRASE ausente; no CI não há pinentry).
           echo preflight > apt/.sign-test
           if ! gpg "${GPG_OPTS[@]}" --clearsign -o apt/.sign-test.asc apt/.sign-test; then
             echo "::error::GPG_PASSPHRASE incorreto (ou secret ausente) para a chave F2B0A3843C9FF986."

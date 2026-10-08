@@ -28,12 +28,20 @@ contrário).
   PIN; a frase de recuperação (≥ 12 palavras, escrita pelo próprio usuário)
   serve só para redefinir o PIN; nunca loga. Tentativas erradas disparam
   trava exponencial (10 s → 24 h) persistida em disco.
+- **Credencial previsível recusada**: a criação do cofre e a redefinição do
+  PIN validam a força da credencial **dentro do processo main** (módulo puro
+  `src/shared/strength.ts`; o renderer só repete o mesmo código para o medidor
+  ao vivo, nunca é a fronteira): dígito repetido (`00000000`), sequência de
+  ponta a ponta (`12345678`), mesmo bloco repetido (`12121212`) e frase com
+  quatro palavras distintas ou menos são bloqueados. O resto, como data de
+  nascimento, palavra comum e PIN fraco, é orientação no medidor da UI e não
+  barra a criação.
 - **Chave sempre protegida**: as chaves passam por Argon2id com custo por
-  credencial — **PIN de 8 dígitos com 256 MB, t=4, p=4** (é o segredo fraco:
-  10^8 candidatas, então o mais caro) e **senha mestra / frase de recuperação
-  com 128 MB, t=3, p=4** — e vivem só na memória do processo main: zeradas no
-  lock e no auto-lock de 5 minutos, nunca por IPC, nunca em log. Erros do cofre
-  não ecoam senha, PIN ou frase.
+  credencial, sendo **PIN de 8 dígitos com 256 MB, t=4, p=4** (é o segredo
+  fraco, com 10^8 candidatas, então o mais caro) e **senha mestra / frase de
+  recuperação com 128 MB, t=3, p=4**. Elas vivem só na memória do processo
+  main: zeradas no lock e no auto-lock de 5 minutos, nunca por IPC, nunca em
+  log. Erros do cofre não ecoam senha, PIN ou frase.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
   chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 3) guarda cada chave
   embrulhada com o custo do Argon2id daquele método, a trava exponencial e o
@@ -86,7 +94,7 @@ contrário).
 
 - **Força bruta offline em `vault.zkv`**: quem já consiga ler o arquivo pode
   testar candidatas fora do app, e a trava exponencial (10 s → 24 h) só vale
-  dentro dele — não há como o arquivo impor limite de tentativas por si só.
+  dentro dele: não há como o arquivo impor limite de tentativas por si só.
   Mitigado por Argon2id caro por tentativa: o PIN de 8 dígitos é o elo mais
   fraco e por isso custa 256 MB / t=4 (cerca de 5× os 64 MB / t=3 antigos),
   o que leva uma varredura completa de 10^8 candidatas de horas (da ordem de

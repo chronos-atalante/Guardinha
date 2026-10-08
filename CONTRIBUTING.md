@@ -59,8 +59,10 @@ git (ver `AGENTS.md`, seção Comandos).
 
 Toda mudança de comportamento, fluxo, configuração, mensagens ou dependências
 **atualiza `README.md` e/ou `docs/*.md` na mesma mudança**, nunca depois.
-Guias novos vão em `docs/`; o `README.md` é o índice. Mudanças voltadas ao
-usuário ganham entrada em [`CHANGELOG.md`](CHANGELOG.md).
+Guias novos vão em `docs/`, com a linha correspondente no índice
+[`docs/README.md`](docs/README.md); o `README.md` da raiz é a porta de
+entrada. Mudanças voltadas ao usuário ganham entrada em
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## 6. Testes
 

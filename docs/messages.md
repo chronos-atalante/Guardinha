@@ -22,6 +22,9 @@ Regras das strings:
   `` `código` `` vira `<code>`; renderize com `richText()` (em
   `src/renderer/src/i18n.tsx`), que monta nós React sem `dangerouslySetInnerHTML`.
 - Elipses são `…` (U+2026), não `...`.
+- Os textos da checagem de força ficam no bloco `strength` (nível, motivos e
+  dicas) e a recusa do `main` em `errors.trivialMaster`, `errors.trivialPin` e
+  `errors.trivialPhrase` (`credenciais.md`).
 
 ## Como cada camada lê
 

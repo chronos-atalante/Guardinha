@@ -2,7 +2,7 @@
 # Roda sobre o package-lock.json com o filtro de alarmes falsos.
 #
 # Mecanismo: `[[IgnoredVulns]]` com `id` + `ignoreUntil` (YYYY-MM-DD) mantém um
-# alerta suprimido só até a data — depois disso ele volta e precisa ser
+# alerta suprimido só até a data; depois disso ele volta e precisa ser
 # resolvido de verdade. `reason` documenta por que vale manter suprimido.
 #
 # Histórico: nenhum ignore ativo neste repositório.

@@ -16,6 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ALIASES: [string, string][] = [
   ['@zero/types/', path.join(ROOT, 'src/types/')],
   ['@zero/messages/', path.join(ROOT, 'src/messages/')],
+  ['@zero/shared/', path.join(ROOT, 'src/shared/')],
   ['@zero/main/', path.join(ROOT, 'src/main/')],
   ['@zero/preload/', path.join(ROOT, 'src/preload/')],
   ['@zero/renderer/', path.join(ROOT, 'src/renderer/src/')],
@@ -40,7 +41,11 @@ registerHooks({
     if (aliased !== null) {
       return { url: aliased, shortCircuit: true };
     }
-    if (specifier === '@zero/types' || specifier === '@zero/messages') {
+    if (
+      specifier === '@zero/types' ||
+      specifier === '@zero/messages' ||
+      specifier === '@zero/shared'
+    ) {
       const index = path.join(ROOT, 'src', specifier.slice('@zero/'.length), 'index.ts');
       if (existsSync(index)) {
         return { url: pathToFileURL(index).href, shortCircuit: true };

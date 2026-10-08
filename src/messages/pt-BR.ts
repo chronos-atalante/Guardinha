@@ -91,6 +91,35 @@ export const ptBR = {
     backToPin: 'Voltar para o PIN',
   },
 
+  /** Medidor de força: rótulos e motivos do medidor (o bloqueio é em `errors`). */
+  strength: {
+    label: 'Força',
+    levels: {
+      veryWeak: 'Muito fraca',
+      weak: 'Fraca',
+      fair: 'Razoável',
+      strong: 'Forte',
+      veryStrong: 'Muito forte',
+    },
+    reasons: {
+      allSame: 'mesmo caractere repetido',
+      sequence: 'sequência óbvia (1234, abcd…)',
+      repeatedBlock: 'mesmo bloco repetido',
+      dateLike: 'parece uma data',
+      fewKinds: 'uma só categoria de caractere',
+      lowVariety: 'poucos caracteres distintos',
+      commonWord: 'contém palavra comum',
+      shortWords: 'palavras curtas demais',
+      fewUniqueWords: 'poucas palavras distintas',
+      repeatedWords: 'palavras repetidas várias vezes',
+    },
+    hintMaster:
+      'Misture maiúsculas, minúsculas, números e símbolos; evite datas, sequências e palavras comuns.',
+    hintPin: 'São só 8 dígitos: nada de data, sequência ou repetição.',
+    hintPhrase: 'Use palavras difíceis de adivinhar e não repita as mesmas várias vezes.',
+    entryNote: 'Só informativo: a senha antiga de outro site não é bloqueada aqui.',
+  },
+
   home: {
     title: 'Senhas',
     searchPlaceholder: 'Buscar por título, usuário ou domínio…',
@@ -177,6 +206,12 @@ export const ptBR = {
     invalidMasterLength: 'A senha mestra deve ter exatamente 24 caracteres.',
     invalidPin: 'O PIN deve ter exatamente 8 dígitos.',
     invalidRecovery: 'A frase de recuperação precisa de pelo menos 12 palavras.',
+    trivialMaster: 'Senha mestra previsível: nada de sequências, repetições ou palavras óbvias.',
+    trivialPin:
+      'PIN previsível: nada de sequência (12345678), dígito repetido (00000000) ' +
+      'ou bloco repetido (12121212).',
+    trivialPhrase:
+      'Frase previsível: as palavras se repetem demais. Use ao menos 5 palavras distintas.',
     invalidTitle: 'Informe o título da credencial.',
     invalidUsername: 'Usuário inválido.',
     invalidDomain: 'Domínio inválido.',

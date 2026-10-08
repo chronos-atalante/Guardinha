@@ -19,7 +19,7 @@ import type { VaultKdfParams } from '@zero/main/container';
 
 const MASTER = 'senha-mestra-guardinha24';
 const PIN = '49201733';
-const NEW_PIN = '87654321';
+const NEW_PIN = '90427156';
 /** Frase de 12 palavras escrita pelo usuário (o app não gera frase alguma). */
 const PHRASE = 'Na feira de hoje o cavalo branco comeu exatamente doze cenouras gigantes';
 const WRONG_PHRASE = 'frase errada com doze palavras no total para nao cair no minimo';
@@ -80,6 +80,32 @@ describe('ciclo de vida do cofre (integração)', () => {
     });
     expect(shortPhrase.ok).toBe(false);
     expect(shortPhrase.error).toBe(currentMessages().errors.invalidRecovery);
+  });
+
+  it('3b. recusa credencial previsível na criação (só o degenerado é bloqueado)', async () => {
+    const trivialPin = await createVault({
+      masterPassword: MASTER,
+      pin: '12345678',
+      recoveryPhrase: PHRASE,
+    });
+    expect(trivialPin.ok).toBe(false);
+    expect(trivialPin.error).toBe(currentMessages().errors.trivialPin);
+
+    const trivialMaster = await createVault({
+      masterPassword: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      pin: PIN,
+      recoveryPhrase: PHRASE,
+    });
+    expect(trivialMaster.ok).toBe(false);
+    expect(trivialMaster.error).toBe(currentMessages().errors.trivialMaster);
+
+    const trivialPhrase = await createVault({
+      masterPassword: MASTER,
+      pin: PIN,
+      recoveryPhrase: 'casa '.repeat(12),
+    });
+    expect(trivialPhrase.ok).toBe(false);
+    expect(trivialPhrase.error).toBe(currentMessages().errors.trivialPhrase);
   });
 
   it('4. falha com PIN errado, trava por 10 s e depois aceita o PIN certo', async () => {
@@ -173,6 +199,12 @@ describe('ciclo de vida do cofre (integração)', () => {
     const badPin = await resetPin({ phrase: PHRASE, newPin: '123' });
     expect(badPin.ok).toBe(false);
     expect(badPin.error).toBe(currentMessages().errors.invalidPin);
+
+    // PIN degenerado não conta tentativa: recusa antes de mexer na frase
+    const trivialPin = await resetPin({ phrase: PHRASE, newPin: '87654321' });
+    expect(trivialPin.ok).toBe(false);
+    expect(trivialPin.error).toBe(currentMessages().errors.trivialPin);
+    expect(trivialPin.status.attempts).toBe(0);
 
     const wrongPhrase = await resetPin({ phrase: WRONG_PHRASE, newPin: NEW_PIN });
     expect(wrongPhrase.ok).toBe(false);

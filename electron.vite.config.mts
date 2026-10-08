@@ -9,6 +9,7 @@ const root = import.meta.dirname;
 const sharedAliases = {
   '@zero/types': resolve(root, 'src/types'),
   '@zero/messages': resolve(root, 'src/messages'),
+  '@zero/shared': resolve(root, 'src/shared'),
 } as const;
 
 export default defineConfig({
