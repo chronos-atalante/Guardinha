@@ -28,6 +28,7 @@ function seedContainer(): void {
     lockUntil: null,
     methods: {
       master: {
+        kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
         kdfSalt: 'a'.repeat(32),
         payload: {
           salt: 'b'.repeat(32),

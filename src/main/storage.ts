@@ -11,8 +11,8 @@ import {
   unpackVaultContainer,
 } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
-import { randomBytes } from '@zero/main/crypto';
-import type { VaultContainerData } from '@zero/main/container';
+import { isValidKdfParams, randomBytes } from '@zero/main/crypto';
+import type { VaultContainerData, VaultKdfParams } from '@zero/main/container';
 import type { SaltedPayload } from '@zero/main/crypto';
 import type { Credential } from '@zero/types';
 
@@ -162,6 +162,13 @@ function parseLegacyEnvelope(raw: unknown): VaultContainerData | null {
   ) {
     return null;
   }
+  const params: VaultKdfParams = {
+    algo: 'argon2id',
+    memoryKiB: kdf.memoryKiB,
+    iterations: kdf.iterations,
+    parallelism: kdf.parallelism,
+  };
+  if (!isValidKdfParams(params)) return null;
   if (typeof envelope.methods !== 'object' || envelope.methods === null) return null;
   const methodsRaw = envelope.methods as Record<string, unknown>;
 
@@ -173,19 +180,15 @@ function parseLegacyEnvelope(raw: unknown): VaultContainerData | null {
     const method = value as Record<string, unknown>;
     const payload = asPayload(method.wrapped);
     if (payload === null || typeof method.salt !== 'string' || method.salt === '') return null;
-    methods[name] = { kdfSalt: method.salt, payload };
+    // o JSON legado tinha um KDF global para todos os métodos
+    methods[name] = { kdf: params, kdfSalt: method.salt, payload };
   }
   if (methods.master === undefined && methods.pin === undefined) return null;
 
   const auth = readLegacyAuthState();
   return {
     createdAt: envelope.createdAt,
-    kdf: {
-      algo: 'argon2id',
-      memoryKiB: kdf.memoryKiB,
-      iterations: kdf.iterations,
-      parallelism: kdf.parallelism,
-    },
+    kdf: params,
     attempts: auth.attempts,
     lockUntil: auth.lockUntil,
     methods,

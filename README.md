@@ -25,15 +25,22 @@ distribuição em **`.deb`**.
 - **Acesso**: login só com **PIN**; a senha mestra é oferecida como opção
   apenas **após 3 falhas** de PIN; a frase de recuperação **não é forma de
   login**; serve exclusivamente para redefinir o PIN esquecido.
-- **Criptografia**: Argon2id (64 MB, t=3, p=4) na derivação de chave e
-  **AES-256-GCM por registro** (`entries/<uuid>.zke`), com salt e IV de 128 bits
-  gerados por hardware e chave por arquivo via HKDF-SHA512.
+- **Checagem de força**: medidor ao vivo (nota, segmentos e motivos) na senha
+  mestra, no PIN, na frase, na senha de cada credencial e na saída do gerador;
+  na criação do cofre e na redefinição do PIN o processo main **recusa
+  credencial previsível** (dígito repetido, sequência de ponta a ponta, mesmo
+  bloco repetido, frase com palavras repetidas demais).
+- **Criptografia**: Argon2id com custo definido por credencial, sendo o **PIN
+  de 8 dígitos** com 256 MB / t=4 / p=4 (o segredo fraco, e por isso o mais
+  caro) e a **senha mestra / frase de recuperação** com 128 MB / t=3 / p=4,
+  além de **AES-256-GCM por registro** (`entries/<uuid>.zke`), com salt e IV de
+  128 bits gerados por hardware e chave por arquivo via HKDF-SHA512.
 - **Trava exponencial**: 10 s → 30 s → 1 min → 1 h → 24 h por tentativa errada,
   persistida em disco; auto-lock após 5 minutos ocioso.
-- **Interface** em coluna com Sidebar (Início, Configuração & Gerador,
-  Atribuições), busca, copiar usuário/senha, botão de globo que **abre o site
+- **Interface** em coluna com Sidebar (Início, Gerador de Senhas, Atribuições,
+  Configurações), busca, copiar usuário/senha, botão de globo que **abre o site
   da credencial no navegador**, gerador de senhas com slider de tamanho,
-  injeção de 5 gostos pessoais e pós-créditos de cinema.
+  injeção de 5 palavras de entropia pessoal e pós-créditos de cinema.
 - **Idioma**: pt-BR (canônico) e inglês; todos os textos em `src/messages/`
   (ver `docs/messages.md`).
 
@@ -64,6 +71,14 @@ Segue o mesmo padrão do **chronos-biblioteca**:
 | `npm run lint:shell`     | Shellcheck nos scripts de `build/scripts/`                    |
 | `npm run build`          | Limpa + compila main/preload/renderer                         |
 | `npm run dist`           | Build + gera o `.deb` com electron-builder                    |
+
+## Documentação
+
+- [`docs/README.md`](docs/README.md) é o índice da documentação técnica:
+  visão geral, arquitetura, cofre, credenciais, telas, API, mensagens, build,
+  testes e mapa de segurança.
+- Os guias mais consultados são [`docs/api.md`](docs/api.md) (contrato
+  `window.api`) e [`docs/messages.md`](docs/messages.md) (i18n).
 
 ## Comunidade
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# guardinha-setup — executado como root via pkexec (PolicyKit) quando o app
+# guardinha-setup: executado como root via pkexec (PolicyKit) quando o app
 # precisa criar/reparar a pasta do cofre em /var/lib. Só cria e renomeia os
 # diretórios FIXOS abaixo com modos fixos: nenhum caminho vem do chamador,
 # então não há como explorá-lo. O dono vem de PKEXEC_UID (definido pelo pkexec).

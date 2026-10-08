@@ -20,6 +20,7 @@ function sampleContainer(): VaultContainerData {
     lockUntil: 1_767_268_810_000,
     methods: {
       master: {
+        kdf: { algo: 'argon2id', memoryKiB: 131_072, iterations: 3, parallelism: 4 },
         kdfSalt: 'aa'.repeat(16),
         payload: {
           salt: 'bb'.repeat(16),
@@ -29,6 +30,7 @@ function sampleContainer(): VaultContainerData {
         },
       },
       pin: {
+        kdf: { algo: 'argon2id', memoryKiB: 262_144, iterations: 4, parallelism: 4 },
         kdfSalt: '11'.repeat(16),
         payload: {
           salt: '22'.repeat(16),
@@ -47,6 +49,29 @@ function sampleContainer(): VaultContainerData {
   };
 }
 
+/**
+ * Reescreve um container v3 no layout v2 (sem o KDF por método), que é como os
+ * cofres antigos ficavam em disco.
+ */
+function downgradeToV2(packed: Buffer): Buffer {
+  const flags = packed.readUInt8(44);
+  const parts: Buffer[] = [packed.subarray(0, 45)];
+  let cursor = 45;
+  for (const flag of [0x01, 0x02, 0x04]) {
+    if ((flags & flag) === 0) continue;
+    cursor += 12; // descarta o KDF por método; sobra salt + payload (layout v2)
+    const payload = cursor + 16;
+    const textLength = packed.readUInt32BE(payload + 48);
+    const end = payload + 52 + textLength;
+    parts.push(packed.subarray(cursor, end));
+    cursor = end;
+  }
+  parts.push(packed.subarray(cursor));
+  const v2 = Buffer.concat(parts);
+  v2.writeUInt32BE(2, 8);
+  return v2;
+}
+
 describe('container do cofre (vault.zkv)', () => {
   it('roundtrip preserva todos os campos', () => {
     const data = sampleContainer();
@@ -58,6 +83,69 @@ describe('container do cofre (vault.zkv)', () => {
     const data: VaultContainerData = { ...sampleContainer(), lockUntil: null, manifest: null };
     const restored = unpackVaultContainer(packVaultContainer(data));
     expect(restored).toEqual(data);
+  });
+
+  it('grava na versão 3, com o custo do Argon2id de cada método', () => {
+    const data = sampleContainer();
+    const master = data.methods.master;
+    const pin = data.methods.pin;
+    if (master === undefined || pin === undefined) throw new Error('fixture incompleta');
+
+    const packed = packVaultContainer(data);
+    expect(packed.readUInt32BE(8)).toBe(3);
+    expect(packed.readUInt32BE(45)).toBe(131_072); // master: 128 MiB
+    expect(packed.readUInt32BE(49)).toBe(3);
+    const pinOffset = 45 + 12 + 16 + 52 + Buffer.from(master.payload.encryptedData, 'hex').length;
+    expect(packed.readUInt32BE(pinOffset)).toBe(262_144); // pin: 256 MiB
+    expect(packed.readUInt32BE(pinOffset + 4)).toBe(4);
+    expect(pin.kdf.memoryKiB).toBe(262_144);
+  });
+
+  it('lê a versão 2 herdando o KDF global do cabeçalho', () => {
+    const data = sampleContainer();
+    const pin = data.methods.pin;
+    if (pin === undefined) throw new Error('fixture incompleta');
+
+    const legacyBuffer = downgradeToV2(packVaultContainer(data));
+    const legacy = unpackVaultContainer(legacyBuffer);
+    expect(legacy).not.toBeNull();
+    if (legacy === null) return;
+    expect(legacy.kdf).toEqual(data.kdf);
+    expect(legacy.createdAt).toBe(data.createdAt);
+    expect(legacy.manifest).toEqual(data.manifest);
+    expect(legacy.methods.master?.kdf).toEqual(data.kdf);
+    expect(legacy.methods.pin?.kdf).toEqual(data.kdf);
+    expect(legacy.methods.pin?.kdfSalt).toBe(pin.kdfSalt);
+    expect(legacy.methods.pin?.payload).toEqual(pin.payload);
+    // gravar de novo sobe para v3 com o custo correto de cada método
+    expect(packVaultContainer(legacy).readUInt32BE(8)).toBe(3);
+  });
+
+  it('recusa parâmetro KDF fora da faixa (cabeçalho ou método)', () => {
+    const packed = packVaultContainer(sampleContainer());
+
+    const hugeHeader = Buffer.from(packed);
+    hugeHeader.writeUInt32BE(4_294_967_295, 20);
+    expect(unpackVaultContainer(hugeHeader)).toBeNull();
+
+    const hugeMethod = Buffer.from(packed);
+    hugeMethod.writeUInt32BE(4_294_967_295, 45);
+    expect(unpackVaultContainer(hugeMethod)).toBeNull();
+
+    const zeroIterations = Buffer.from(packed);
+    zeroIterations.writeUInt32BE(0, 49);
+    expect(unpackVaultContainer(zeroIterations)).toBeNull();
+  });
+
+  it('recusa gravar parâmetro KDF fora da faixa', () => {
+    const data = sampleContainer();
+    const pin = data.methods.pin;
+    if (pin === undefined) throw new Error('fixture incompleta');
+    data.methods.pin = {
+      ...pin,
+      kdf: { algo: 'argon2id', memoryKiB: 1, iterations: 1, parallelism: 1 },
+    };
+    expect(() => packVaultContainer(data)).toThrow('parâmetros KDF inválidos');
   });
 
   it('recusa mágica inválida, versão desconhecida e lixo no fim', () => {

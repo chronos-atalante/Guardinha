@@ -22,12 +22,13 @@ export const en: Messages = {
 
   app: {
     name: 'Guardinha',
-    subtitle: 'Mint 22.X Vault',
+    subtitle: 'Otaku Delirante',
     statusLocal: '100% Local / Encrypted',
     nav: {
       home: 'Home (Passwords)',
-      config: 'Settings & Generator',
+      generator: 'Password Generator',
       credits: 'Attributions',
+      settings: 'Settings',
     },
     lock: 'Lock vault',
     lockTitle: 'Lock the vault now',
@@ -86,6 +87,34 @@ export const en: Messages = {
     backToPin: 'Back to PIN',
   },
 
+  strength: {
+    label: 'Strength',
+    levels: {
+      veryWeak: 'Very weak',
+      weak: 'Weak',
+      fair: 'Fair',
+      strong: 'Strong',
+      veryStrong: 'Very strong',
+    },
+    reasons: {
+      allSame: 'same character repeated',
+      sequence: 'obvious sequence (1234, abcd…)',
+      repeatedBlock: 'same block repeated',
+      dateLike: 'looks like a date',
+      fewKinds: 'a single character class',
+      lowVariety: 'too few distinct characters',
+      commonWord: 'contains a common word',
+      shortWords: 'words too short',
+      fewUniqueWords: 'too few distinct words',
+      repeatedWords: 'words repeated many times',
+    },
+    hintMaster:
+      'Mix upper and lower case, numbers and symbols; avoid dates, sequences and common words.',
+    hintPin: 'It is only 8 digits: no dates, sequences or repeats.',
+    hintPhrase: 'Use hard-to-guess words and do not repeat the same ones over and over.',
+    entryNote: 'Informational only: an old password from another site is never blocked here.',
+  },
+
   home: {
     title: 'Passwords',
     searchPlaceholder: 'Search by title, username or domain…',
@@ -125,7 +154,7 @@ export const en: Messages = {
   },
 
   generator: {
-    title: 'Settings & Password Generator',
+    title: 'Password Generator',
     subtitle: 'Adjust the length (0 to 72) and inject personal taste for high entropy.',
     lengthLabel: 'Password length',
     lengthValue: (n: number): string => `${n} characters`,
@@ -146,6 +175,14 @@ export const en: Messages = {
     loopHint: 'The credits loop back to the start.',
   },
 
+  settings: {
+    title: 'Settings',
+    emptyTitle: 'Coming soon',
+    emptyText:
+      'Guardinha settings will be implemented in a future release. ' +
+      'In the meantime, language and vault lock stay in the sidebar.',
+  },
+
   errors: {
     vaultExists: 'The vault already exists.',
     vaultMissing: 'Vault not found in /var/lib/.guardinha/.vault/.',
@@ -163,6 +200,11 @@ export const en: Messages = {
     invalidMasterLength: 'The master password must have exactly 24 characters.',
     invalidPin: 'The PIN must have exactly 8 digits.',
     invalidRecovery: 'The recovery phrase must have at least 12 words.',
+    trivialMaster: 'Predictable master password: no sequences, repeats or obvious words.',
+    trivialPin:
+      'Predictable PIN: no sequence (12345678), repeated digit (00000000) ' +
+      'or repeated block (12121212).',
+    trivialPhrase: 'Predictable phrase: the words repeat too much. Use at least 5 distinct words.',
     invalidTitle: 'Enter the credential title.',
     invalidUsername: 'Invalid username.',
     invalidDomain: 'Invalid domain.',

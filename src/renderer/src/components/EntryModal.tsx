@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import { Eye, EyeOff, Trash2, X } from 'lucide-react';
 import { useMessages } from '@zero/renderer/i18n';
+import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
+import { evaluatePassword } from '@zero/shared';
 import type { Credential, CredentialInput } from '@zero/types';
 
 interface EntryModalProps {
@@ -138,6 +140,9 @@ export function EntryModal({ entry, onClose, onChanged, onToast }: EntryModalPro
               {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          {password !== '' && (
+            <StrengthMeter result={evaluatePassword(password)} hint={m.strength.entryNote} />
+          )}
         </label>
 
         <label className="block space-y-1.5">

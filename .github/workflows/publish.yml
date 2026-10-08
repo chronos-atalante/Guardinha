@@ -2,13 +2,13 @@ name: Publicar .deb
 
 # Publica o .deb na GitHub Release correspondente e, junto, o repositório
 # APT flat (índices assinados + alias estável do .deb) como assets da mesma
-# Release — base: .../releases/latest/download/ (suite ./).
+# Release, base: .../releases/latest/download/ (suite ./).
 # Gatilhos:
 # - push na main: lê package.json → se ainda não existir Release para
 #   v<versão>, publica automaticamente (é assim que a versão nova sai);
 # - tag v* enviada manualmente (ex.: git push origin v1.0.1), ou
 # - Release criada na UI do GitHub, ou
-# - execução manual na UI (workflow_dispatch — também serve para reanexar
+# - execução manual na UI (workflow_dispatch, que também serve para reanexar
 #   assets de uma Release que falhou no meio).
 # Sem loop: pushes de tag/Release feitos com o GITHUB_TOKEN desta execução
 # não disparam novos runs, e a tag só é criada antes do upload dos assets.
@@ -34,13 +34,8 @@ concurrency:
   cancel-in-progress: false
 
 # secrets não pode ser usado em `if:`; copia para env (padrão do GitHub).
-# Sem estes secrets os steps dependentes são pulados em silêncio e a Release
-# sai só com o .deb — quando forem adicionados em Settings → Secrets →
-# Actions, eles voltam a rodar sozinhos, sem editar o workflow.
 env:
   VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
-  GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-  GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
 jobs:
   resolver-versao:
@@ -89,7 +84,7 @@ jobs:
           fi
 
           # Push na main: só interessa publicar se ainda não houver Release.
-          # (Se a tag existe mas a Release não, publica mesmo assim — é o
+          # (Se a tag existe mas a Release não, publica mesmo assim: é o
           # caso de um run anterior que morreu antes do upload.)
           if [ "$EVENT_NAME" = "push" ] && [ "$REF_TYPE" = "branch" ]; then
             CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
@@ -98,9 +93,9 @@ jobs:
               "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$TAG" || true)"
             if [ "$CODE" = "200" ]; then
               PUBLICAR=false
-              echo "::notice::Release $TAG já existe — nada a publicar nesta execução."
+              echo "::notice::Release $TAG já existe; nada a publicar nesta execução."
             elif [ "$CODE" != "404" ]; then
-              echo "::warning::Não deu para conferir a Release $TAG (HTTP ${CODE:-erro}) — seguirei publicando."
+              echo "::warning::Não deu para conferir a Release $TAG (HTTP ${CODE:-erro}); seguirei publicando."
             fi
           fi
 
@@ -140,7 +135,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$TAG" ]; then
-            echo "::error::Tag vazia — o job 'Verificar versão' não rodou?"
+            echo "::error::Tag vazia: o job 'Verificar versão' não rodou?"
             exit 1
           fi
           # Identidade do autor: sem user.name/user.email no runner o
@@ -148,7 +143,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-            echo "Tag $TAG já existe — vou anexar os assets nela."
+            echo "Tag $TAG já existe; vou anexar os assets nela."
           else
             git tag -a "$TAG" -m "Release $TAG"
             git push origin "refs/tags/$TAG"
@@ -164,9 +159,9 @@ jobs:
           tag_name: ${{ needs.resolver-versao.outputs.tag }}
 
       - name: Gerar repo APT flat assinado (assets estáveis)
-        # Sem GPG_PRIVATE_KEY (repo novo, secrets ainda do outro repositório),
-        # pula: o .deb já foi anexado no step anterior e a Release fica verde.
-        if: ${{ env.GPG_PRIVATE_KEY != '' }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [ -z "$GPG_PRIVATE_KEY" ]; then
@@ -182,18 +177,18 @@ jobs:
           # na UI do Actions sem precisar abrir o log cru).
           printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import || true
           if ! gpg --list-secret-keys F2B0A3843C9FF986 >/dev/null 2>&1; then
-            echo "::error::GPG_PRIVATE_KEY inválido ou incompleto — cole o bloco inteiro do arquivo, COM as linhas -----BEGIN PGP PRIVATE KEY BLOCK----- e -----END PGP PRIVATE KEY BLOCK----- (sem elas o gpg não reconhece o formato)."
+            echo "::error::GPG_PRIVATE_KEY inválido ou incompleto: cole o bloco inteiro do arquivo, COM as linhas -----BEGIN PGP PRIVATE KEY BLOCK----- e -----END PGP PRIVATE KEY BLOCK----- (sem elas o gpg não reconhece o formato)."
             exit 1
           fi
           if [ -n "${GPG_PASSPHRASE:-}" ]; then
-            G_OPTS=(--batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
+            GPG_OPTS=(--batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE")
           else
-            G_OPTS=(--batch --yes)
+            GPG_OPTS=(--batch --yes)
           fi
           # Teste de assinatura antes de gerar nada: falha = passphrase errada
-          # (ou secret GPG_PASSPHRASE ausente — no CI não há pinentry).
+          # (ou secret GPG_PASSPHRASE ausente; no CI não há pinentry).
           echo preflight > apt/.sign-test
-          if ! gpg "${G_OPTS[@]}" --clearsign -o apt/.sign-test.asc apt/.sign-test; then
+          if ! gpg "${GPG_OPTS[@]}" --clearsign -o apt/.sign-test.asc apt/.sign-test; then
             echo "::error::GPG_PASSPHRASE incorreto (ou secret ausente) para a chave F2B0A3843C9FF986."
             exit 1
           fi
@@ -217,14 +212,12 @@ jobs:
             -o APT::FTPArchive::Release::Description="Guardinha" \
             . > ../Release.tmp
           mv ../Release.tmp Release
-          gpg "${G_OPTS[@]}" --clearsign -o InRelease Release
-          gpg "${G_OPTS[@]}" -abs -o Release.gpg Release
+          gpg "${GPG_OPTS[@]}" --clearsign -o InRelease Release
+          gpg "${GPG_OPTS[@]}" -abs -o Release.gpg Release
           gpg --armor --export > public.key
           echo "Repo APT flat gerado:" && ls -l
 
       - name: Anexar repo APT à Release
-        # Pula junto com a geração (só existem arquivos se o step anterior rodou).
-        if: ${{ env.GPG_PRIVATE_KEY != '' }}
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |

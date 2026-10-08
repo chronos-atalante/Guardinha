@@ -4,6 +4,54 @@ Todos os lançamentos seguem [versionamento semântico](https://semver.org/lang/
 (`MAJOR.MINOR.PATCH`) e o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 em português do Brasil.
 
+## [Não lançado]
+
+## [1.2.1] - 2026-10-08
+
+### Adicionado
+
+- Aba **Configurações** na sidebar, logo abaixo de Atribuições: por ora mostra
+  apenas o aviso de que as configurações serão implementadas em uma versão
+  futura (idioma e bloqueio do cofre continuam na barra lateral).
+- **Checagem de força** compartilhada (`src/shared/strength.ts`, usada por
+  renderer e main): medidor ao vivo com nota de 0 a 4 e motivos em senha
+  mestra, PIN, frase de recuperação, senha da credencial salva e saída do
+  gerador, além de dica própria para cada tipo de credencial.
+- Documentação técnica nova em `docs/`: índice em `docs/README.md` e guias de
+  visão geral, arquitetura, cofre, credenciais, telas, build, testes e mapa de
+  segurança; `docs/api.md` e `docs/messages.md` passaram a apontar a checagem
+  de força e o `README.md` ganhou a seção Documentação.
+
+### Alterado
+
+- Sidebar reordenada e renomeada: **Início (Senhas)**, **Gerador de Senhas**,
+  **Atribuições** e **Configurações**; o item "Configuração & Gerador" virou
+  "Gerador de Senhas", também no título da tela.
+- Textos dos `.md` revisados: pontuação do português do Brasil e remoção de
+  travessões em `README.md`, `SECURITY.md`, `AGENTS.md` e `CHANGELOG.md`.
+
+### Segurança
+
+- `vault.zkv` passa à **versão 3**: cada método de desbloqueio guarda o próprio
+  custo do Argon2id: **PIN de 8 dígitos com 256 MB / t=4 / p=4** (o segredo
+  fraco, o mais caro) e **senha mestra / frase de recuperação com 128 MB /
+  t=3 / p=4** (antes 64 MB / t=3 para todos). Cofres na versão 2 continuam
+  legíveis e cada método é reembrulhado com o custo atual no desbloqueio em que
+  a credencial dele é usada (migração incremental: só quem tem a credencial
+  consegue reembrulhar).
+- Parâmetros KDF fora de uma faixa segura agora são recusados na leitura e na
+  gravação do container (fail-closed), para um arquivo adulterado não conseguir
+  exigir memória ou CPU ilimitadas do app.
+- Custo maior por tentativa: no hardware de referência (i7 antigo) o
+  desbloqueio com PIN passou de ~0,4 s para ~2 s e a senha mestra / frase de
+  ~0,4 s para ~0,8 s; criar o cofre também fica mais lento.
+- Criação do cofre e redefinição do PIN **recusam credencial previsível**,
+  com a regra rodando também no processo main (não se confia no renderer):
+  dígito repetido (`00000000`), sequência de ponta a ponta (`12345678`),
+  mesmo bloco repetido (`12121212`), frase com quatro palavras distintas ou
+  menos; data de nascimento, palavra comum e PIN fraco são **só avisados** no
+  medidor, nunca recusados (`errors.trivialMaster`/`trivialPin`/`trivialPhrase`).
+
 ## [1.1.0] - 2026-10-07
 
 ### Segurança

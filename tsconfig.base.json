@@ -25,6 +25,8 @@
     "paths": {
       "@zero/types": ["./src/types/index.ts"],
       "@zero/types/*": ["./src/types/*.ts", "./src/types/*/index.ts"],
+      "@zero/shared": ["./src/shared/index.ts"],
+      "@zero/shared/*": ["./src/shared/*.ts", "./src/shared/*/index.ts"],
       "@zero/messages": ["./src/messages/index.ts"],
       "@zero/messages/*": ["./src/messages/*.ts", "./src/messages/*/index.ts"],
       "@zero/main/*": ["./src/main/*.ts", "./src/main/*/index.ts"],

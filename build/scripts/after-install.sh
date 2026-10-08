@@ -65,7 +65,7 @@ if apparmor_status --enabled > /dev/null 2>&1; then
 fi
 
 # ---------- Cofre de dados em /var/lib (fora de ~/) ----------
-# Pastas ocultas por padrão: /var/lib/.guardinha/.vault — a raiz é
+# Pastas ocultas por padrão: /var/lib/.guardinha/.vault. A raiz é
 # root:root 0711 sem listagem (navegar/apagar o topo exige sudo) e o vault
 # fica com o usuário instalador (0700) para o app funcionar. Se o instalador
 # não for identificado, o próprio app pede sudo no primeiro uso.
@@ -110,7 +110,7 @@ cat > /usr/share/polkit-1/actions/com.guardinha.keypass.policy <<'POLICY_EOF'
 POLICY_EOF
 
 # pkexec exige o dono root e sem escrita para o grupo/outros; o build pode
-# ter gravado as pastas com 0775 — normaliza antes de validar o helper.
+# ter gravado as pastas com 0775; normaliza antes de validar o helper.
 install -d -m 0755 -o root -g root '/opt/${sanitizedProductName}' '/opt/${sanitizedProductName}/resources' || true
 chown root:root '/opt/${sanitizedProductName}/resources/guardinha-setup' || true
 chmod 0755 '/opt/${sanitizedProductName}/resources/guardinha-setup' || true

@@ -1,12 +1,56 @@
 import crypto from 'node:crypto';
 import { argon2id } from 'hash-wasm';
 
-// Argon2id: mínimo 64 MB de RAM, t=3, p=4 (conforme especificação do cofre)
-const ARGON2 = {
-  memorySize: 65536, // KiB = 64 MB
-  iterations: 3,
-  parallelism: 4,
-} as const;
+/** Parâmetros do Argon2id usados na derivação da chave do cofre. */
+export interface Argon2Params {
+  memoryKiB: number;
+  iterations: number;
+  parallelism: number;
+}
+
+/**
+ * Faixa aceita na *leitura* de um container. Serve só para que um arquivo
+ * adulterado não faça o app alocar GiB ou rodar horas (DoS local): o piso não
+ * é garantia de segurança, o que protege é o custo que gravamos na escrita
+ * (perfis abaixo). Estourou a faixa → arquivo tratado como adulterado.
+ */
+export const KDF_LIMITS = {
+  memoryKiB: [16_384, 1_048_576] as const,
+  iterations: [1, 8] as const,
+  parallelism: [1, 8] as const,
+};
+
+/** Senha mestra e frase de recuperação (segredos longos): 128 MiB, t=3, p=4. */
+export const KDF_CREDENTIAL: Argon2Params = { memoryKiB: 131_072, iterations: 3, parallelism: 4 };
+
+/** PIN de 8 dígitos (segredo fraco, 10^8 candidatas): 256 MiB, t=4, p=4. */
+export const KDF_PIN: Argon2Params = { memoryKiB: 262_144, iterations: 4, parallelism: 4 };
+
+/** Perfil alvo por método de desbloqueio (escrita e migração incremental). */
+export function kdfProfileFor(kind: 'master' | 'pin' | 'recovery'): Argon2Params {
+  return kind === 'pin' ? KDF_PIN : KDF_CREDENTIAL;
+}
+
+export function isSameKdf(a: Argon2Params, b: Argon2Params): boolean {
+  return (
+    a.memoryKiB === b.memoryKiB && a.iterations === b.iterations && a.parallelism === b.parallelism
+  );
+}
+
+function within(value: unknown, [min, max]: readonly [number, number]): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+/** Parâmetros legíveis dentro da faixa (inteiro, sem NaN, sem estouro). */
+export function isValidKdfParams(value: unknown): value is Argon2Params {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    within(record.memoryKiB, KDF_LIMITS.memoryKiB) &&
+    within(record.iterations, KDF_LIMITS.iterations) &&
+    within(record.parallelism, KDF_LIMITS.parallelism)
+  );
+}
 
 export const MASTER_PASSWORD_LENGTH = 24;
 export const PIN_LENGTH = 8;
@@ -23,15 +67,19 @@ export interface SaltedPayload extends EncryptedPayload {
   salt: string;
 }
 
-/** Derivação de chave primária via Argon2id. */
-export async function deriveKey(password: string, salt: Buffer): Promise<Buffer> {
+/** Derivação de chave primária via Argon2id com os parâmetros do chamador. */
+export async function deriveKey(
+  password: string,
+  salt: Buffer,
+  params: Argon2Params,
+): Promise<Buffer> {
   const hashHex = await argon2id({
     password,
     salt: new Uint8Array(salt),
-    parallelism: ARGON2.parallelism,
-    iterations: ARGON2.iterations,
+    parallelism: params.parallelism,
+    iterations: params.iterations,
     hashLength: 32,
-    memorySize: ARGON2.memorySize,
+    memorySize: params.memoryKiB,
     outputType: 'hex',
   });
   return Buffer.from(hashHex, 'hex');

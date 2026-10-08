@@ -1,26 +1,34 @@
-import { decryptRecord, encryptRecord } from '@zero/main/crypto';
-import type { SaltedPayload } from '@zero/main/crypto';
+import { decryptRecord, encryptRecord, isValidKdfParams } from '@zero/main/crypto';
+import type { Argon2Params, SaltedPayload } from '@zero/main/crypto';
 
 /**
  * Formato binário do cofre. Nenhum arquivo legível de fora do app:
  *
- * - `vault.zkv` (magic `ZKVAULT1`): parâmetros KDF públicos + blobs de chave
- *   embrulhados + contagem da trava exponencial + manifesto cifrado.
+ * - `vault.zkv` (magic `ZKVAULT1`): parâmetros KDF globais (informativos) +
+ *   blobs de chave embrulhados com o KDF de cada método + contagem da trava
+ *   exponencial + manifesto cifrado.
  * - `entries/<uuid>.zke` (magic `ZENTRY01`): salt | IV | tag | texto cifrado.
  *
- * Toda leitura é fail-closed: forma inválida, truncamento ou byte adulterado
- * devolvem `null` (ou lançam), nunca conteúdo em claro.
+ * Toda leitura é fail-closed: forma inválida, truncamento, parâmetro KDF fora
+ * da faixa ou byte adulterado devolvem `null` (ou lançam), nunca conteúdo em
+ * claro.
  */
 const VAULT_MAGIC = Buffer.from('ZKVAULT1', 'ascii');
 const ENTRY_MAGIC = Buffer.from('ZENTRY01', 'ascii');
 
-export const VAULT_VERSION = 2;
+/** Versão atual: parâmetros Argon2id individuais por método de desbloqueio. */
+export const VAULT_VERSION = 3;
+/** Versão anterior, ainda legível: um único KDF global no cabeçalho. */
+const LEGACY_VAULT_VERSION = 2;
 
 /**
  * `magic(8) + version(4) + createdAt(8) + memoryKiB(4) + iterations(4) +
- * parallelism(4) + attempts(4) + lockUntil(8) + flags(1)`
+ * parallelism(4) + attempts(4) + lockUntil(8) + flags(1)`.
+ * Em v3 o tripo de KDF do cabeçalho é informativo (cada método tem o seu).
  */
 const VAULT_HEADER_BYTES = 45;
+/** `memoryKiB(4) + iterations(4) + parallelism(4)` antes do salt de cada método (v3). */
+const METHOD_KDF_BYTES = 12;
 /** `salt(16) + iv(16) + tag(16) + ctLen(4)` antes do texto cifrado. */
 const BLOB_HEAD_BYTES = 52;
 const ENTRY_HEADER_BYTES = 8 + BLOB_HEAD_BYTES;
@@ -33,15 +41,14 @@ const FLAGS_ALL = FLAG_MASTER | FLAG_PIN | FLAG_RECOVERY | FLAG_MANIFEST;
 
 const MANIFEST_VERSION = 1;
 
-export interface VaultKdfParams {
+export interface VaultKdfParams extends Argon2Params {
   algo: 'argon2id';
-  memoryKiB: number;
-  iterations: number;
-  parallelism: number;
 }
 
 /** Chave do cofre embrulhada por uma credencial (Argon2id + AES-256-GCM). */
 export interface WrappedMethod {
+  /** Custo do Argon2id usado só neste método (PIN é o mais caro). */
+  kdf: VaultKdfParams;
   /** Salt do Argon2id (128 bits). */
   kdfSalt: string;
   /** Registro cifrado com a própria chave derivada. */
@@ -64,7 +71,11 @@ function blobBytes(payload: SaltedPayload): number {
 }
 
 function methodBlobBytes(method: WrappedMethod): number {
-  return 16 + blobBytes(method.payload);
+  return METHOD_KDF_BYTES + 16 + blobBytes(method.payload);
+}
+
+function assertKdf(value: VaultKdfParams): void {
+  if (!isValidKdfParams(value)) throw new Error('parâmetros KDF inválidos');
 }
 
 function writeBlob(buffer: Buffer, offset: number, payload: SaltedPayload): number {
@@ -95,19 +106,35 @@ function readBlob(buffer: Buffer, offset: number): { payload: SaltedPayload; nex
 }
 
 function writeMethodBlob(buffer: Buffer, offset: number, method: WrappedMethod): number {
-  Buffer.from(method.kdfSalt, 'hex').copy(buffer, offset);
-  return writeBlob(buffer, offset + 16, method.payload);
+  buffer.writeUInt32BE(method.kdf.memoryKiB, offset);
+  buffer.writeUInt32BE(method.kdf.iterations, offset + 4);
+  buffer.writeUInt32BE(method.kdf.parallelism, offset + 8);
+  Buffer.from(method.kdfSalt, 'hex').copy(buffer, offset + METHOD_KDF_BYTES);
+  return writeBlob(buffer, offset + METHOD_KDF_BYTES + 16, method.payload);
+}
+
+function readKdfAt(buffer: Buffer, offset: number): VaultKdfParams | null {
+  if (offset + METHOD_KDF_BYTES > buffer.length) return null;
+  const kdf: VaultKdfParams = {
+    algo: 'argon2id',
+    memoryKiB: buffer.readUInt32BE(offset),
+    iterations: buffer.readUInt32BE(offset + 4),
+    parallelism: buffer.readUInt32BE(offset + 8),
+  };
+  return isValidKdfParams(kdf) ? kdf : null;
 }
 
 function readMethodBlob(
   buffer: Buffer,
   offset: number,
+  kdf: VaultKdfParams,
 ): { method: WrappedMethod; next: number } | null {
   if (offset + 16 > buffer.length) return null;
   const read = readBlob(buffer, offset + 16);
   if (read === null) return null;
   return {
     method: {
+      kdf,
       kdfSalt: buffer.subarray(offset, offset + 16).toString('hex'),
       payload: read.payload,
     },
@@ -116,6 +143,7 @@ function readMethodBlob(
 }
 
 export function packVaultContainer(data: VaultContainerData): Buffer {
+  assertKdf(data.kdf);
   const methods: [number, WrappedMethod | undefined][] = [
     [FLAG_MASTER, data.methods.master],
     [FLAG_PIN, data.methods.pin],
@@ -125,6 +153,7 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
   let size = VAULT_HEADER_BYTES;
   for (const [flag, method] of methods) {
     if (method !== undefined) {
+      assertKdf(method.kdf);
       flags |= flag;
       size += methodBlobBytes(method);
     }
@@ -138,6 +167,7 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
   VAULT_MAGIC.copy(buffer, 0);
   buffer.writeUInt32BE(VAULT_VERSION, 8);
   buffer.writeBigUInt64BE(BigInt(data.createdAt), 12);
+  // tripo global de KDF: informativo em v3 (cada método tem o seu)
   buffer.writeUInt32BE(data.kdf.memoryKiB, 20);
   buffer.writeUInt32BE(data.kdf.iterations, 24);
   buffer.writeUInt32BE(data.kdf.parallelism, 28);
@@ -159,9 +189,14 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
 export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null {
   if (buffer.length < VAULT_HEADER_BYTES) return null;
   if (!buffer.subarray(0, 8).equals(VAULT_MAGIC)) return null;
-  if (buffer.readUInt32BE(8) !== VAULT_VERSION) return null;
+  const version = buffer.readUInt32BE(8);
+  if (version !== VAULT_VERSION && version !== LEGACY_VAULT_VERSION) return null;
   const flags = buffer.readUInt8(44);
   if ((flags & ~FLAGS_ALL) !== 0) return null;
+
+  // o tripo do cabeçalho tem o mesmo formato do KDF de cada método
+  const headerKdf = readKdfAt(buffer, 20);
+  if (headerKdf === null) return null;
 
   let cursor = VAULT_HEADER_BYTES;
   const methods: VaultContainerData['methods'] = {};
@@ -172,7 +207,14 @@ export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null 
   ];
   for (const [flag, name] of entries) {
     if ((flags & flag) === 0) continue;
-    const read = readMethodBlob(buffer, cursor);
+    let kdf = headerKdf;
+    if (version === VAULT_VERSION) {
+      const perMethod = readKdfAt(buffer, cursor);
+      if (perMethod === null) return null;
+      kdf = perMethod;
+      cursor += METHOD_KDF_BYTES;
+    }
+    const read = readMethodBlob(buffer, cursor, kdf);
     if (read === null) return null;
     methods[name] = read.method;
     cursor = read.next;
@@ -192,12 +234,7 @@ export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null 
   const lockUntilRaw = buffer.readBigInt64BE(36);
   return {
     createdAt: Number(buffer.readBigUInt64BE(12)),
-    kdf: {
-      algo: 'argon2id',
-      memoryKiB: buffer.readUInt32BE(20),
-      iterations: buffer.readUInt32BE(24),
-      parallelism: buffer.readUInt32BE(28),
-    },
+    kdf: headerKdf,
     attempts: buffer.readUInt32BE(32),
     lockUntil: lockUntilRaw === 0n ? null : Number(lockUntilRaw),
     methods,

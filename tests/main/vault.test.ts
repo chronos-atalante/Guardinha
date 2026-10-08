@@ -3,13 +3,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { resetAttempts } from '@zero/main/auth';
+import { KDF_CREDENTIAL, KDF_PIN, deriveKey, encryptRecord, randomBytes } from '@zero/main/crypto';
 import { currentMessages } from '@zero/main/i18n';
 import { listEntries, removeEntry, saveEntry } from '@zero/main/entries';
-import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
+import { readVaultContainer, writeVaultContainer } from '@zero/main/storage';
+import {
+  createVault,
+  getStatus,
+  lock,
+  requireSessionKey,
+  resetPin,
+  unlock,
+} from '@zero/main/vault';
+import type { VaultKdfParams } from '@zero/main/container';
 
 const MASTER = 'senha-mestra-guardinha24';
 const PIN = '49201733';
-const NEW_PIN = '87654321';
+const NEW_PIN = '90427156';
 /** Frase de 12 palavras escrita pelo usuário (o app não gera frase alguma). */
 const PHRASE = 'Na feira de hoje o cavalo branco comeu exatamente doze cenouras gigantes';
 const WRONG_PHRASE = 'frase errada com doze palavras no total para nao cair no minimo';
@@ -25,6 +35,13 @@ describe('ciclo de vida do cofre (integração)', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.status).toMatchObject({ exists: true, locked: false, attempts: 0 });
+
+    // cada método nasce com o custo do Argon2id adequado ao segredo (v3)
+    const container = readVaultContainer();
+    expect(container?.methods.pin?.kdf).toMatchObject(KDF_PIN);
+    expect(container?.methods.master?.kdf).toMatchObject(KDF_CREDENTIAL);
+    expect(container?.methods.recovery?.kdf).toMatchObject(KDF_CREDENTIAL);
+    expect(container?.methods.pin?.kdf).not.toEqual(container?.methods.master?.kdf);
   });
 
   it('2. recusa recriar um cofre existente', async () => {
@@ -63,6 +80,32 @@ describe('ciclo de vida do cofre (integração)', () => {
     });
     expect(shortPhrase.ok).toBe(false);
     expect(shortPhrase.error).toBe(currentMessages().errors.invalidRecovery);
+  });
+
+  it('3b. recusa credencial previsível na criação (só o degenerado é bloqueado)', async () => {
+    const trivialPin = await createVault({
+      masterPassword: MASTER,
+      pin: '12345678',
+      recoveryPhrase: PHRASE,
+    });
+    expect(trivialPin.ok).toBe(false);
+    expect(trivialPin.error).toBe(currentMessages().errors.trivialPin);
+
+    const trivialMaster = await createVault({
+      masterPassword: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      pin: PIN,
+      recoveryPhrase: PHRASE,
+    });
+    expect(trivialMaster.ok).toBe(false);
+    expect(trivialMaster.error).toBe(currentMessages().errors.trivialMaster);
+
+    const trivialPhrase = await createVault({
+      masterPassword: MASTER,
+      pin: PIN,
+      recoveryPhrase: 'casa '.repeat(12),
+    });
+    expect(trivialPhrase.ok).toBe(false);
+    expect(trivialPhrase.error).toBe(currentMessages().errors.trivialPhrase);
   });
 
   it('4. falha com PIN errado, trava por 10 s e depois aceita o PIN certo', async () => {
@@ -157,6 +200,12 @@ describe('ciclo de vida do cofre (integração)', () => {
     expect(badPin.ok).toBe(false);
     expect(badPin.error).toBe(currentMessages().errors.invalidPin);
 
+    // PIN degenerado não conta tentativa: recusa antes de mexer na frase
+    const trivialPin = await resetPin({ phrase: PHRASE, newPin: '87654321' });
+    expect(trivialPin.ok).toBe(false);
+    expect(trivialPin.error).toBe(currentMessages().errors.trivialPin);
+    expect(trivialPin.status.attempts).toBe(0);
+
     const wrongPhrase = await resetPin({ phrase: WRONG_PHRASE, newPin: NEW_PIN });
     expect(wrongPhrase.ok).toBe(false);
     expect(wrongPhrase.error).toBe(currentMessages().errors.wrongRecovery);
@@ -208,5 +257,33 @@ describe('ciclo de vida do cofre (integração)', () => {
     // remoção externa do arquivo da credencial → manifesto acusa
     fs.rmSync(path.join(entriesDir, `${id}.zke`));
     expect(() => listEntries()).toThrow(tampered);
+  });
+
+  it('10. sobe o custo do Argon2id no desbloqueio seguinte (migração do cofre)', async () => {
+    resetAttempts();
+    const vaultKey = requireSessionKey();
+
+    // simula um cofre gravado com o custo antigo (64 MiB, t=3, p=4)
+    const oldKdf: VaultKdfParams = {
+      algo: 'argon2id',
+      memoryKiB: 65_536,
+      iterations: 3,
+      parallelism: 4,
+    };
+    const kdfSalt = randomBytes(16);
+    const derived = await deriveKey(PIN, kdfSalt, oldKdf);
+    const payload = encryptRecord({ key: vaultKey.toString('hex') }, derived);
+
+    const container = readVaultContainer();
+    if (container === null) throw new Error('container sumiu');
+    container.methods.pin = { kdf: oldKdf, kdfSalt: kdfSalt.toString('hex'), payload };
+    writeVaultContainer(container);
+    expect(readVaultContainer()?.methods.pin?.kdf).toMatchObject(oldKdf);
+
+    const unlocked = await unlock({ credential: PIN, kind: 'pin' });
+    expect(unlocked.ok).toBe(true);
+    expect(readVaultContainer()?.methods.pin?.kdf).toMatchObject(KDF_PIN);
+    // os outros métodos só sobem quando a própria credencial for usada
+    expect(readVaultContainer()?.methods.master?.kdf).toMatchObject(KDF_CREDENTIAL);
   });
 });

@@ -122,6 +122,9 @@ describe('migração do legado JSON (~/.guardinha-vault)', () => {
     expect(container?.createdAt).toBe(LEGACY_ENVELOPE.createdAt);
     expect(container?.kdf).toEqual(LEGACY_ENVELOPE.kdf);
     expect(container?.methods.master?.kdfSalt).toBe('aa'.repeat(16));
+    // o JSON legado tinha um KDF único: ele vira o KDF de cada método
+    expect(container?.methods.master?.kdf).toEqual(LEGACY_ENVELOPE.kdf);
+    expect(container?.methods.pin?.kdf).toEqual(LEGACY_ENVELOPE.kdf);
     expect(container?.methods.pin?.payload.encryptedData).toBe('55');
     // estado da trava exponencial veio do auth-state.json legado
     expect(container?.attempts).toBe(3);
@@ -181,6 +184,7 @@ describe('migração do intermediário XDG (~/.local/share)', () => {
       lockUntil: null,
       methods: {
         master: {
+          kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
           kdfSalt: 'ab'.repeat(16),
           payload: {
             salt: 'cd'.repeat(16),
