@@ -5,7 +5,7 @@ import { useMessages } from '@zero/renderer/i18n';
 import { copyAndAutoClear } from '@zero/renderer/clipboard';
 import { SensitivitySlider } from '@zero/renderer/components/SensitivitySlider';
 import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
-import { evaluatePassword } from '@zero/shared';
+import { strengthFor } from '@zero/shared';
 
 interface GeneratorProps {
   onToast: (message: string) => void;
@@ -148,7 +148,9 @@ export function Generator({ onToast }: GeneratorProps): JSX.Element {
             </button>
           </div>
         )}
-        {generatedPassword !== '' && <StrengthMeter result={evaluatePassword(generatedPassword)} />}
+        {generatedPassword !== '' && (
+          <StrengthMeter result={strengthFor('password').evaluate(generatedPassword)} />
+        )}
       </div>
     </div>
   );

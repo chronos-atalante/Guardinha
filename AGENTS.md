@@ -12,17 +12,21 @@ offline, alvo Linux Mint 22.X (Zena) e distribuição `.deb`. Versão:
 Camadas:
 
 - `src/main/`: janela e IPC (`index.ts`), cofre e ciclo de vida (`vault.ts`),
-  chave em memória (`session.ts`, Singleton `VaultSessionManager`), CRUD de
-  credenciais (`entries.ts`), criptografia (`crypto.ts`), persistência
-  (`storage.ts`) sob a fachada (`facade.ts`, `VaultStorageFacade`), clipboard
-  (`clipboard.ts`, `SecureClipboardProxy`), trava exponencial (`auth.ts`),
-  sudo via PolicyKit (`privilege.ts`) e idioma (`settings.ts`, `i18n.ts`).
+  chave em memória (`session.ts`, Singleton `VaultSessionManager`), atividade
+  e auto-lock (`activity.ts`, Observer `ActivityMonitor`), desbloqueio
+  (`unlock.ts`, cadeia de manipuladores), desembrulho de chaves
+  (`unwrapping.ts`, mapa por tipo de credencial), CRUD de credenciais
+  (`entries.ts`), criptografia (`crypto.ts`), persistência (`storage.ts`) sob
+  a fachada (`facade.ts`, `VaultStorageFacade`), clipboard (`clipboard.ts`,
+  `SecureClipboardProxy`), trava exponencial (`auth.ts`), sudo via PolicyKit
+  (`privilege.ts`) e idioma (`settings.ts`, `i18n.ts`).
 - `src/messages/`: textos do app em pt-BR (canônico) e en (`@zero/messages`);
   guia em `docs/messages.md`.
 - `src/preload/`: única ponte da UI; monta e expõe `window.api` tipado.
 - `src/renderer/`: React; não acessa disco, rede nem Node direto.
 - `src/shared/`: regras puras compartilhadas por `main` e `renderer`
-  (`@zero/shared`, ex.: avaliação de força de credencial; sem Node nem DOM).
+  (`@zero/shared`, ex.: avaliação de força de credencial e a Strategy
+  `strengthFor`; sem Node nem DOM).
 - `src/types/`: contratos compartilhados (`@zero/types`, barrel).
 
 ## Arquitetura
@@ -50,8 +54,14 @@ Camadas:
   `src/types/` e entrada em `docs/api.md`.
 - A chave do cofre vive em memória no main, dentro do Singleton
   `VaultSessionManager` (`session.ts`); ele zera o Buffer no lock, no auto-lock
-  de 5 minutos e no encerramento do app. `vault.ts` e `entries.ts` não tocam
-  `fs` nem cifra: passam pela fachada `VaultStorageFacade` (`facade.ts`).
+  de 5 minutos e no encerramento do app. O temporizador de ociosidade mora no
+  `ActivityMonitor` (`activity.ts`): no evento de idle o Singleton zera a chave
+  e o entrypoint empurra `vault:auto-locked` para o renderer (o polling de
+  15 s em `App.tsx` fica como rede de segurança). O desbloqueio passa pela
+  cadeia `unlock.ts` (trava exponencial, formato, Argon2id, integridade) e o
+  desembrulho da chave vem do mapa em `unwrapping.ts`. `vault.ts` e
+  `entries.ts` não tocam `fs` nem cifra: passam pela fachada
+  `VaultStorageFacade` (`facade.ts`).
 
 ## Design patterns
 
@@ -62,6 +72,14 @@ Camadas:
   nível. `src/preload/index.ts` também é fachada (monta `window.api`).
 - Proxy: `SecureClipboardProxy` (`src/main/clipboard.ts`) envolve o clipboard
   nativo com expiração em 30 s.
+- Chain of Responsibility: `unlock.ts` encadeia trava exponencial, formato,
+  derivação Argon2id e integridade; `vault.ts` só chama `runUnlockChain`.
+- Factory Method: `unwrapping.ts` resolve o embrulho/desembrulho da chave por
+  tipo de credencial (`keyUnwrapperFor(kind)`, mapa `UNWRAPPERS`).
+- Strategy: `src/shared/strategy.ts` (`strengthFor(kind)`) escolhe a régua de
+  força por tipo de credencial; as funções puras continuam em `strength.ts`.
+- Observer: `activity.ts` (`ActivityMonitor`) notifica o Singleton e o
+  entrypoint na ociosidade; cada ouvinte se inscreve e cancela sozinho.
 - Barrel exports: `index.ts` só re-exporta (exceto os entrypoints
   `src/main/index.ts` e `src/preload/index.ts`).
 - Tipagem de domínio por interfaces/uniões fechadas em `src/types/`

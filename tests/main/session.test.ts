@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentMessages } from '@zero/main/i18n';
-import { IDLE_LOCK_MS, VaultSessionManager, vaultSession } from '@zero/main/session';
+import { IDLE_LOCK_MS } from '@zero/main/activity';
+import { VaultSessionManager, vaultSession } from '@zero/main/session';
 
 describe('VaultSessionManager (Singleton)', () => {
   beforeEach(() => {

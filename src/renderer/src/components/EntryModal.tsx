@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 import { Eye, EyeOff, Trash2, X } from 'lucide-react';
 import { useMessages } from '@zero/renderer/i18n';
 import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
-import { evaluatePassword } from '@zero/shared';
+import { strengthFor } from '@zero/shared';
 import type { Credential, CredentialInput } from '@zero/types';
 
 interface EntryModalProps {
@@ -141,7 +141,10 @@ export function EntryModal({ entry, onClose, onChanged, onToast }: EntryModalPro
             </button>
           </div>
           {password !== '' && (
-            <StrengthMeter result={evaluatePassword(password)} hint={m.strength.entryNote} />
+            <StrengthMeter
+              result={strengthFor('password').evaluate(password)}
+              hint={m.strength.entryNote}
+            />
           )}
         </label>
 

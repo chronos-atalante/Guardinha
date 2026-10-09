@@ -6,30 +6,31 @@ quem precisa mexer no código saber onde cada medida mora e o que ela protege.
 
 ## Onde cada medida vive
 
-| Medida                                                 | Arquivo principal                                                         |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| Recusa de credencial previsível na criação e no reset  | `src/shared/strength.ts`, `src/main/vault.ts`                             |
-| Argon2id com custo por método (256 MiB para o PIN)     | `src/main/crypto.ts`                                                      |
-| Formato do `vault.zkv` e faixa de leitura do KDF       | `src/main/container.ts`                                                   |
-| Chave só em memória, lock e auto-lock de 5 min         | `src/main/session.ts` (`VaultSessionManager`), `src/main/vault.ts`        |
-| Trava exponencial (10 s até 24 h) persistida no cofre  | `src/main/auth.ts`, `src/main/storage.ts`                                 |
-| AES-256-GCM por registro e HKDF-SHA512 por arquivo     | `src/main/crypto.ts`                                                      |
-| Fachada única de persistência (fs, cifra, manifesto)   | `src/main/facade.ts`                                                      |
-| Manifesto cifrado e falha fechada na adulteração       | `src/main/container.ts`, `src/main/storage.ts`                            |
-| Credenciais validadas antes de gravar                  | `src/main/entries.ts`, `src/main/auth.ts`                                 |
-| Id de arquivo seguro (path traversal, CVE-2026-21589)  | `src/main/storage.ts` (`assertSafeEntryId`)                               |
-| Raiz `/var/lib/.guardinha` com `root:root 0711`        | `build/scripts/after-install.sh`                                          |
-| Senha de administrador fora do app (PolicyKit)         | `src/main/privilege.ts`, `build/scripts/guardinha-setup`                  |
-| Confinamento AppArmor do processo instalado            | `build/apparmor-profile`, `build/scripts/after-install.sh`                |
-| Declaração do perfil no empacotamento                  | `package.json` (bloco `build.deb.appArmorProfile`)                        |
-| Guarda de origem em todo canal IPC                     | `src/main/index.ts` (`assertAppFrame`)                                    |
-| Navegação presa, `window.open`, permissões web negadas | `src/main/index.ts`                                                       |
-| Renderer servido por `guardinha://`                    | `src/main/index.ts` (`registerAppProtocol`)                               |
-| Fuses do Electron                                      | `package.json` (bloco `build.electronFuses`)                              |
-| CSP e preload com `contextIsolation`/`sandbox`         | `src/renderer/index.html`, `src/preload/index.ts`                         |
-| Limpeza do clipboard em 30 s no processo main          | `src/main/clipboard.ts` (`SecureClipboardProxy`)                          |
-| Erros do cofre sem eco de senha, PIN ou frase          | `src/main/vault.ts`, `src/main/entries.ts`, `src/messages/`               |
-| Auditoria de dependências e de scripts                 | `.osv-scanner.toml`, `npm run lint:shell`, `.github/workflows/codeql.yml` |
+| Medida                                                   | Arquivo principal                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Recusa de credencial previsível na criação e no reset    | `src/shared/strength.ts`, `src/shared/strategy.ts`, `src/main/vault.ts`   |
+| Argon2id com custo por método (256 MiB para o PIN)       | `src/main/crypto.ts`, `src/main/unwrapping.ts`                            |
+| Formato do `vault.zkv` e faixa de leitura do KDF         | `src/main/container.ts`                                                   |
+| Chave só em memória, lock e auto-lock de 5 min           | `src/main/session.ts` (`VaultSessionManager`), `src/main/activity.ts`     |
+| Cadeia de desbloqueio (trava, formato, KDF, integridade) | `src/main/unlock.ts`, `src/main/vault.ts`                                 |
+| Trava exponencial (10 s até 24 h) persistida no cofre    | `src/main/auth.ts`, `src/main/storage.ts`                                 |
+| AES-256-GCM por registro e HKDF-SHA512 por arquivo       | `src/main/crypto.ts`                                                      |
+| Fachada única de persistência (fs, cifra, manifesto)     | `src/main/facade.ts`                                                      |
+| Manifesto cifrado e falha fechada na adulteração         | `src/main/container.ts`, `src/main/storage.ts`                            |
+| Credenciais validadas antes de gravar                    | `src/main/entries.ts`, `src/main/auth.ts`                                 |
+| Id de arquivo seguro (path traversal, CVE-2026-21589)    | `src/main/storage.ts` (`assertSafeEntryId`)                               |
+| Raiz `/var/lib/.guardinha` com `root:root 0711`          | `build/scripts/after-install.sh`                                          |
+| Senha de administrador fora do app (PolicyKit)           | `src/main/privilege.ts`, `build/scripts/guardinha-setup`                  |
+| Confinamento AppArmor do processo instalado              | `build/apparmor-profile`, `build/scripts/after-install.sh`                |
+| Declaração do perfil no empacotamento                    | `package.json` (bloco `build.deb.appArmorProfile`)                        |
+| Guarda de origem em todo canal IPC                       | `src/main/index.ts` (`assertAppFrame`)                                    |
+| Navegação presa, `window.open`, permissões web negadas   | `src/main/index.ts`                                                       |
+| Renderer servido por `guardinha://`                      | `src/main/index.ts` (`registerAppProtocol`)                               |
+| Fuses do Electron                                        | `package.json` (bloco `build.electronFuses`)                              |
+| CSP e preload com `contextIsolation`/`sandbox`           | `src/renderer/index.html`, `src/preload/index.ts`                         |
+| Limpeza do clipboard em 30 s no processo main            | `src/main/clipboard.ts` (`SecureClipboardProxy`)                          |
+| Erros do cofre sem eco de senha, PIN ou frase            | `src/main/vault.ts`, `src/main/entries.ts`, `src/messages/`               |
+| Auditoria de dependências e de scripts                   | `.osv-scanner.toml`, `npm run lint:shell`, `.github/workflows/codeql.yml` |
 
 ## Fluxo de confiança
 
@@ -44,7 +45,9 @@ Nenhuma entrada do renderer passa direto para o disco: o id precisa ser UUID
 conhecido, o domínio aberto no navegador precisa começar por `http`/`https` e
 a chave do cofre é exigida pelas funções de domínio (`requireSessionKey`).
 `vault.ts` e `entries.ts` não tocam `fs` nem cifra: passam pela
-`VaultStorageFacade` (`src/main/facade.ts`).
+`VaultStorageFacade` (`src/main/facade.ts`). O desbloqueio passa pela cadeia
+`unlock.ts` (trava exponencial antes do Argon2id; PIN malformado não paga a
+derivação) e o desembrulho da chave sai do mapa `unwrapping.ts`.
 
 ## O que não enfraquecer
 

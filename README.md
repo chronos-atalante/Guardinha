@@ -95,7 +95,8 @@ Segue o mesmo padrão do **chronos-biblioteca**:
 ## Segurança
 
 - Chave do cofre só em memória no processo main (dentro de um Singleton que
-  zera o Buffer); nunca sai por IPC.
+  zera o Buffer); nunca sai por IPC. O desbloqueio é uma cadeia de
+  verificações (trava exponencial, formato, Argon2id, integridade).
 - `contextIsolation: true`, `sandbox: true`, preload CJS e CSP no `index.html`.
 - Nenhuma senha ou frase em log; erros chegam à UI já localizados.
 - Navegação presa à página do app; `window.open` só repassa `https:` para o

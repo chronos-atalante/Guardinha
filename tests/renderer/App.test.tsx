@@ -39,6 +39,9 @@ function installApi(status: VaultStatus, entries: Credential[]): ElectronApi {
       unlock: () => Promise.resolve({ ok: false, error: 'não usado', status }),
       resetPin: () => Promise.resolve({ ok: false, error: 'não usado', status }),
       lock: () => Promise.resolve(status),
+      onAutoLocked: () => () => {
+        // sem auto-lock exercitado aqui
+      },
     },
     openDomain: () => Promise.resolve(),
     clipboard: { copy: () => Promise.resolve() },

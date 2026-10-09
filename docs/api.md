@@ -28,6 +28,18 @@ credencial (`credenciais.md`).
 | `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).                                   |
 | `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                                                       |
 
+### Push do auto-lock (evento main → renderer)
+
+| Método                   | Canal               | Payload → retorno      | Descrição                                                                                        |
+| ------------------------ | ------------------- | ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `onAutoLocked(listener)` | `vault:auto-locked` | `VaultStatus` → `void` | Ouvinte do auto-lock: o main empurra o status novo quando a chave sai da memória por ociosidade. |
+
+`onAutoLocked` registra um ouvinte de evento (não é `invoke`/`handle`) e
+devolve a função que cancela a assinatura; o App chama
+`unsubscribe()` no cleanup do `useEffect`. O renderer ainda consulta
+`vault.status()` a cada 15 s como rede de segurança, mas a volta à tela de
+autenticação no auto-lock é imediata.
+
 ## `window.api.openDomain`
 
 | Método               | Canal               | Payload → retorno | Descrição                                                                                   |

@@ -27,7 +27,7 @@ preload é a única ponte.
 | `src/renderer/` | Interface React: telas, modais, clipboard e contexto de idioma  | `App.tsx`                                         |
 | `src/types/`    | Contratos compartilhados (`VaultStatus`, `ElectronApi`, opções) | `index.ts` (barrel)                               |
 | `src/messages/` | Textos em pt-BR (canônico) e inglês                             | `pt-BR.ts`, `en.ts`                               |
-| `src/shared/`   | Regras puras usadas pelos dois processos, sem Node nem DOM      | `strength.ts`                                     |
+| `src/shared/`   | Regras puras usadas pelos dois processos, sem Node nem DOM      | `strength.ts`, `strategy.ts`                      |
 | `tests/`        | Suíte Vitest (main em Node, renderer em jsdom)                  | `tests/main/`, `tests/renderer/`                  |
 
 Regras de organização: arquivo `index.ts` só reexporta (exceto os dois
@@ -35,17 +35,20 @@ entrypoints que o Electron exige) e arquivo no teto de ~500 linhas é quebrado.
 
 ### Módulos do processo main
 
-| Arquivo        | Papel                                                                          |
-| -------------- | ------------------------------------------------------------------------------ |
-| `index.ts`     | Entrypoint: janela, protocolo `guardinha://`, política da sessão e canais IPC  |
-| `vault.ts`     | Ciclo de vida do cofre (criar, desbloquear, redefinir o PIN, travar)           |
-| `session.ts`   | `VaultSessionManager` (Singleton): guarda, zeragem e auto-lock da chave        |
-| `facade.ts`    | `VaultStorageFacade` (Fachada): fs, AES-256-GCM e manifesto num ponto só       |
-| `clipboard.ts` | `SecureClipboardProxy` (Proxy): clipboard nativo com limpeza em 30 s           |
-| `entries.ts`   | CRUD de credenciais sobre a fachada (sem `fs` nem cifra na mão)                |
-| `crypto.ts`    | Argon2id, AES-256-GCM, HKDF e gerador de senha                                 |
-| `storage.ts`   | Persistência de baixo nível (`fs-extra`), chamada pela fachada e por `auth.ts` |
-| `auth.ts`      | Trava exponencial e validações de formato                                      |
+| Arquivo         | Papel                                                                               |
+| --------------- | ----------------------------------------------------------------------------------- |
+| `index.ts`      | Entrypoint: janela, protocolo `guardinha://`, política da sessão, canais IPC e push |
+| `vault.ts`      | Ciclo de vida do cofre (criar, desbloquear, redefinir o PIN, travar)                |
+| `session.ts`    | `VaultSessionManager` (Singleton): guarda e zeragem da chave; assina o monitor      |
+| `activity.ts`   | `ActivityMonitor` (Observer): temporizador de ociosidade e ouvintes de idle         |
+| `unlock.ts`     | Cadeia de desbloqueio (Chain of Responsibility): trava, formato, KDF e integridade  |
+| `unwrapping.ts` | Embrulho/desembrulho da chave por tipo de credencial (Factory Method)               |
+| `facade.ts`     | `VaultStorageFacade` (Fachada): fs, AES-256-GCM e manifesto num ponto só            |
+| `clipboard.ts`  | `SecureClipboardProxy` (Proxy): clipboard nativo com limpeza em 30 s                |
+| `entries.ts`    | CRUD de credenciais sobre a fachada (sem `fs` nem cifra na mão)                     |
+| `crypto.ts`     | Argon2id, AES-256-GCM, HKDF e gerador de senha                                      |
+| `storage.ts`    | Persistência de baixo nível (`fs-extra`), chamada pela fachada e por `auth.ts`      |
+| `auth.ts`       | Trava exponencial, `statusFrom` e validações de formato                             |
 
 ## Aliases `@zero/*`
 
@@ -76,18 +79,20 @@ existe com tipo em `src/types/` e linha em `api.md`.
 
 ## Ciclo de vida da sessão
 
-| Estado            | O que acontece                                                       |
-| ----------------- | -------------------------------------------------------------------- |
-| Sem cofre         | `AuthModal` no modo de criação (credenciais e depois a frase)        |
-| Bloqueado         | `AuthModal` no modo de desbloqueio (PIN; mestra após 3 falhas)       |
-| Desbloqueado      | Chave do cofre no `VaultSessionManager` (Singleton), telas liberadas |
-| Trava exponencial | Falhas contam no disco; espera crescente bloqueia o desbloqueio      |
-| Auto-lock         | 5 minutos ocioso zeram a chave na memória e bloqueiam                |
-| Encerramento      | `before-quit` bloqueia o cofre e solta o temporizador do clipboard   |
+| Estado            | O que acontece                                                                            |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| Sem cofre         | `AuthModal` no modo de criação (credenciais e depois a frase)                             |
+| Bloqueado         | `AuthModal` no modo de desbloqueio (PIN; mestra após 3 falhas)                            |
+| Desbloqueado      | Chave do cofre no `VaultSessionManager` (Singleton), telas liberadas                      |
+| Trava exponencial | Falhas contam no disco; espera crescente bloqueia o desbloqueio                           |
+| Auto-lock         | 5 minutos ocioso zeram a chave na memória e bloqueiam; o main empurra `vault:auto-locked` |
+| Encerramento      | `before-quit` bloqueia o cofre e solta o temporizador do clipboard                        |
 
-O renderer não é avisado por evento: ele consulta `vault.status()` a cada 15 s
-enquanto estiver desbloqueado, o que faz o auto-lock aparecer na tela em até
-esse intervalo (`App.tsx`).
+O auto-lock é um Observer: o `ActivityMonitor` (`activity.ts`) dispara o
+evento de ociosidade, o `VaultSessionManager` zera a chave e o entrypoint
+empurra `vault:auto-locked` para o renderer (`App.tsx` assina e recarrega o
+status na hora). O polling de `vault.status()` a cada 15 s continua como rede
+de segurança, não como caminho principal.
 
 ## Árvore do repositório
 

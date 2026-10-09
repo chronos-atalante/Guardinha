@@ -12,6 +12,9 @@ function installApi(clipboardCopy: (value: string) => Promise<void>): ElectronAp
       unlock: unused,
       resetPin: unused,
       lock: unused,
+      onAutoLocked: () => () => {
+        // auto-lock não é exercitado neste arquivo
+      },
     },
     openDomain: unused,
     clipboard: { copy: clipboardCopy },

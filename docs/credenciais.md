@@ -51,7 +51,9 @@ o conjunto de caracteres. Comprimento 0 devolve vazio e a tela avisa.
 ## Checagem de força
 
 O cálculo mora em `src/shared/strength.ts`, um módulo **puro** importado pelo
-renderer (medidor ao vivo) e pelo main (recusa na criação). O renderer é só
+renderer (medidor ao vivo) e pelo main (recusa na criação). A escolha da régua
+por tipo de credencial (senha, mestra, PIN e frase) é a Strategy em
+`src/shared/strategy.ts` (`strengthFor(kind)`). O renderer é só
 conveniência: quem decide é o processo main.
 
 ### Nota

@@ -1,22 +1,23 @@
+import { activityMonitor } from '@zero/main/activity';
 import { currentMessages } from '@zero/main/i18n';
 
-/** Trava automática após 5 minutos sem operação no cofre. */
-export const IDLE_LOCK_MS = 5 * 60 * 1000;
-
 /**
- * Única detentora da chave do cofre em memória (Singleton). A guarda, a
- * zeragem de memória e o auto-lock por ociosidade moram aqui: nenhum outro
- * módulo mantém cópia da chave, e o lock deixa de ser uma variável de módulo
- * espalhada entre arquivos.
+ * Única detentora da chave do cofre em memória (Singleton). A guarda e a
+ * zeragem de memória moram aqui: nenhum outro módulo mantém cópia da chave, e
+ * o lock deixa de ser uma variável de módulo espalhada entre arquivos.
+ *
+ * A ociosidade não é assunto desta classe: quem mede o tempo é o
+ * `ActivityMonitor` (Observer), que avisa e este Singleton obedece.
  */
 export class VaultSessionManager {
   private static instance: VaultSessionManager | null = null;
 
   private key: Buffer | null = null;
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   private constructor() {
-    // Singleton: a construção passa por getInstance().
+    activityMonitor.subscribe(() => {
+      this.wipe();
+    });
   }
 
   /** Instância única do processo; o construtor é privado de propósito. */
@@ -49,29 +50,23 @@ export class VaultSessionManager {
     return this.key !== null;
   }
 
-  /** Rearma a trava automática (chamado a cada operação bem-sucedida). */
+  /** Marca atividade e rearma a trava automática. */
   public touch(): void {
     if (this.key === null) return;
-    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = null;
-      this.wipe();
-    }, IDLE_LOCK_MS);
+    activityMonitor.touch();
   }
 
   /**
-   * Zera a chave na memória (`fill(0)`) e cancela o auto-lock: o lock manual e
-   * o encerramento do app passam por aqui, sem sobrar cópia legível.
+   * Zera a chave na memória (`fill(0)`) e cancela o auto-lock: o lock manual,
+   * o timeout e o encerramento do app passam por aqui, sem sobrar cópia
+   * legível.
    */
   public wipe(): void {
     if (this.key !== null) {
       this.key.fill(0);
       this.key = null;
     }
-    if (this.idleTimer !== null) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
+    activityMonitor.stop();
   }
 }
 

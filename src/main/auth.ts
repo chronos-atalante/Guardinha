@@ -1,11 +1,27 @@
 import { MASTER_PASSWORD_LENGTH, PIN_LENGTH } from '@zero/main/crypto';
 import { readAuthState, writeAuthState } from '@zero/main/storage';
 import type { PersistedAuthState } from '@zero/main/storage';
+import type { VaultStatus } from '@zero/types';
 
 const PENALTY_DELAYS_SECONDS = [10, 30, 60, 3600, 86400]; // 10s, 30s, 1m, 1h, 24h
 
 export function loadAuthState(): PersistedAuthState {
   return readAuthState();
+}
+
+/** Visão do cofre para a interface: existe, está travado e quanto falta da espera. */
+export function statusFrom(
+  auth: PersistedAuthState,
+  exists: boolean,
+  locked: boolean,
+): VaultStatus {
+  return {
+    exists,
+    locked,
+    attempts: auth.attempts,
+    lockUntil: auth.lockUntil,
+    lockRemainingMs: getLockRemainingMs(auth),
+  };
 }
 
 export function calculateLockout(attemptCount: number): number {

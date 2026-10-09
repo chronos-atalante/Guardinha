@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
 import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
+import { activityMonitor } from '@zero/main/activity';
 import { validateDomainFormat } from '@zero/main/auth';
 import { removeEntry, saveEntry, listEntries } from '@zero/main/entries';
 import { generateHighEntropyPassword } from '@zero/main/crypto';
@@ -288,6 +289,18 @@ function removeApplicationMenu(): void {
   Menu.setApplicationMenu(null);
 }
 
+/**
+ * Ouvinte do `ActivityMonitor` (Observer): o auto-lock zera a chave no main e
+ * empurra o novo status para o renderer no mesmo instante (o renderer não
+ * precisa esperar o polling de 15 s para voltar à tela de autenticação).
+ */
+function registerActivityObserver(): void {
+  activityMonitor.subscribe(() => {
+    const status = lock();
+    mainWindow?.webContents.send('vault:auto-locked', status);
+  });
+}
+
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -307,6 +320,7 @@ if (!gotLock) {
       registerIpc();
       removeApplicationMenu();
       registerPermissionPolicy();
+      registerActivityObserver();
       createWindow();
 
       app.on('activate', () => {

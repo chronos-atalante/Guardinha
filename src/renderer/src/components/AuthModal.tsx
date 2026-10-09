@@ -9,7 +9,7 @@ import {
   normalizePhrase,
 } from '@zero/renderer/formatters';
 import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
-import { evaluateMaster, evaluatePhrase, evaluatePin } from '@zero/shared';
+import { strengthFor } from '@zero/shared';
 import type { VaultStatus } from '@zero/types';
 
 interface AuthModalProps {
@@ -75,7 +75,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
       setError(m.auth.masterLength(24, master.length));
       return;
     }
-    if (evaluateMaster(master).blocked) {
+    if (strengthFor('master').evaluate(master).blocked) {
       setError(m.errors.trivialMaster);
       return;
     }
@@ -87,7 +87,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
       setError(m.auth.pinInvalid);
       return;
     }
-    if (evaluatePin(pin).blocked) {
+    if (strengthFor('pin').evaluate(pin).blocked) {
       setError(m.errors.trivialPin);
       return;
     }
@@ -101,7 +101,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
       setError(m.auth.recoveryTooShort(RECOVERY_MIN_WORDS, words));
       return;
     }
-    if (evaluatePhrase(phrase).blocked) {
+    if (strengthFor('phrase').evaluate(phrase).blocked) {
       setError(m.errors.trivialPhrase);
       return;
     }
@@ -165,7 +165,7 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
       setError(m.auth.pinInvalid);
       return;
     }
-    if (evaluatePin(newPin).blocked) {
+    if (strengthFor('pin').evaluate(newPin).blocked) {
       setError(m.errors.trivialPin);
       return;
     }
@@ -243,7 +243,10 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
             />
           </label>
           {master !== '' && (
-            <StrengthMeter result={evaluateMaster(master)} hint={m.strength.hintMaster} />
+            <StrengthMeter
+              result={strengthFor('master').evaluate(master)}
+              hint={m.strength.hintMaster}
+            />
           )}
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-slate-300">{m.auth.masterConfirmLabel}</span>
@@ -266,7 +269,9 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
               className={inputClass}
             />
           </label>
-          {pin !== '' && <StrengthMeter result={evaluatePin(pin)} hint={m.strength.hintPin} />}
+          {pin !== '' && (
+            <StrengthMeter result={strengthFor('pin').evaluate(pin)} hint={m.strength.hintPin} />
+          )}
           <p className="text-xs text-slate-500">{m.auth.pinSubtitle}</p>
           {error !== null && <p className="text-xs text-rose-400">{error}</p>}
           <button
@@ -296,7 +301,10 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
           />
         </label>
         {phrase !== '' && (
-          <StrengthMeter result={evaluatePhrase(phrase)} hint={m.strength.hintPhrase} />
+          <StrengthMeter
+            result={strengthFor('phrase').evaluate(phrase)}
+            hint={m.strength.hintPhrase}
+          />
         )}
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-300">{m.auth.recoveryConfirmLabel}</span>
@@ -367,7 +375,9 @@ export function AuthModal({ status, onRefresh }: AuthModalProps): JSX.Element {
             className={inputClass}
           />
         </label>
-        {newPin !== '' && <StrengthMeter result={evaluatePin(newPin)} hint={m.strength.hintPin} />}
+        {newPin !== '' && (
+          <StrengthMeter result={strengthFor('pin').evaluate(newPin)} hint={m.strength.hintPin} />
+        )}
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-300">{m.auth.newPinConfirmLabel}</span>
           <input

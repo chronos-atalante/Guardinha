@@ -41,9 +41,11 @@ contrário).
   fraco, com 10^8 candidatas, então o mais caro) e **senha mestra / frase de
   recuperação com 128 MB, t=3, p=4**. Elas vivem só na memória do processo
   main, dentro do `VaultSessionManager` (Singleton, `src/main/session.ts`),
-  que zera o Buffer no lock, no auto-lock de 5 minutos e no encerramento do
+  que zera o Buffer no lock, no auto-lock de 5 minutos (temporizador do
+  `ActivityMonitor`, em `src/main/activity.ts`) e no encerramento do
   app; nunca passam por IPC e nunca aparecem em log. Erros do cofre não ecoam
-  senha, PIN ou frase.
+  senha, PIN ou frase, e o desbloqueio é uma cadeia (`src/main/unlock.ts`) em
+  que a trava exponencial corta antes da derivação Argon2id.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
   chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 3) guarda cada chave
   embrulhada com o custo do Argon2id daquele método, a trava exponencial e o
