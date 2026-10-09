@@ -10,6 +10,9 @@ const api: ElectronApi = {
     lock: () => ipcRenderer.invoke('vault:lock'),
   },
   openDomain: (domain) => ipcRenderer.invoke('shell:open-domain', domain),
+  clipboard: {
+    copy: (value) => ipcRenderer.invoke('clipboard:copy', value),
+  },
   entries: {
     list: () => ipcRenderer.invoke('entries:list'),
     save: (entry) => ipcRenderer.invoke('entries:save', entry),

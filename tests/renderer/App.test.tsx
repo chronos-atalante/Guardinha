@@ -41,6 +41,7 @@ function installApi(status: VaultStatus, entries: Credential[]): ElectronApi {
       lock: () => Promise.resolve(status),
     },
     openDomain: () => Promise.resolve(),
+    clipboard: { copy: () => Promise.resolve() },
     entries: {
       list: () => Promise.resolve(entries),
       save: () => Promise.resolve(entries),

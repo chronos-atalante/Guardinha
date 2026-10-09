@@ -25,6 +25,10 @@ export interface ElectronApi {
   };
   /** Abre o domínio da credencial no navegador padrão do sistema. */
   openDomain: (domain: string) => Promise<void>;
+  clipboard: {
+    /** Copia para o clipboard nativo; some da área de transferência em 30 s. */
+    copy: (value: string) => Promise<void>;
+  };
   entries: {
     list: () => Promise<Credential[]>;
     save: (entry: CredentialInput) => Promise<Credential[]>;

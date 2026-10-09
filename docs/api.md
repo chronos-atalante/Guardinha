@@ -34,6 +34,16 @@ credencial (`credenciais.md`).
 | -------------------- | ------------------- | ----------------- | ------------------------------------------------------------------------------------------- |
 | `openDomain(domain)` | `shell:open-domain` | `string → void`   | Abre o domínio da credencial no navegador padrão (`shell.openExternal`; só `http`/`https`). |
 
+## `window.api.clipboard`
+
+| Método        | Canal            | Payload → retorno | Descrição                                                                                                                  |
+| ------------- | ---------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `copy(value)` | `clipboard:copy` | `string → void`   | Copia no clipboard nativo e limpa sozinho 30 s depois (`SecureClipboardProxy`, no main; salvo cópia posterior do usuário). |
+
+A cópia mora no processo main: o renderer não pede permissão de clipboard ao
+sistema e o temporizador sobrevive a uma recarga da página. O canal só aceita
+texto (o handler recusa outro tipo de payload).
+
 ## `window.api.entries`
 
 | Método        | Canal            | Payload → retorno                | Descrição                                                   |

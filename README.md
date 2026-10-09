@@ -94,13 +94,13 @@ Segue o mesmo padrão do **chronos-biblioteca**:
 
 ## Segurança
 
-- Chave do cofre só em memória no processo main; nunca sai por IPC e é zerada
-  no lock.
+- Chave do cofre só em memória no processo main (dentro de um Singleton que
+  zera o Buffer); nunca sai por IPC.
 - `contextIsolation: true`, `sandbox: true`, preload CJS e CSP no `index.html`.
 - Nenhuma senha ou frase em log; erros chegam à UI já localizados.
 - Navegação presa à página do app; `window.open` só repassa `https:` para o
-  navegador do sistema; toda permissão web da sessão é negada, menos o
-  clipboard (cópia de usuário/senha).
+  navegador do sistema; toda permissão web da sessão é negada (a cópia de
+  usuário/senha usa o clipboard nativo no main).
 - Copiar credencial limpa o clipboard 30 s depois, salvo cópia posterior do
   usuário; DevTools fica desligado no app empacotado.
 

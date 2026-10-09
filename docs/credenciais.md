@@ -114,6 +114,8 @@ chave `strength`.
 
 ## Área de transferência
 
-Copiar usuário ou senha usa `navigator.clipboard` e agenda limpeza em 30 s
-(`src/renderer/src/clipboard.ts`). Se o usuário copiar outra coisa nesse
-intervalo, o app não sobrescreve. O mesmo vale para a senha gerada.
+Copiar usuário ou senha passa pelo canal `clipboard:copy` e usa o clipboard
+nativo no processo main (`SecureClipboardProxy`, em `src/main/clipboard.ts`),
+que agenda a limpeza em 30 s. Se o usuário copiar outra coisa nesse intervalo,
+o app não sobrescreve. O mesmo vale para a senha gerada. O renderer não usa
+`navigator.clipboard`: toda permissão web da sessão é negada.

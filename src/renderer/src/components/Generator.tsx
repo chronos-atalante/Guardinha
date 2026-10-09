@@ -50,8 +50,12 @@ export function Generator({ onToast }: GeneratorProps): JSX.Element {
   };
 
   const handleCopy = async (): Promise<void> => {
-    await copyAndAutoClear(generatedPassword);
-    onToast(m.generator.toastCopied);
+    try {
+      await copyAndAutoClear(generatedPassword);
+      onToast(m.generator.toastCopied);
+    } catch (caught) {
+      onToast(errorMessage(caught, m.errors.internal));
+    }
   };
 
   const toggles: { checked: boolean; set: (value: boolean) => void; label: string }[] = [

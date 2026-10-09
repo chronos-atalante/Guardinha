@@ -40,8 +40,10 @@ contrário).
   credencial, sendo **PIN de 8 dígitos com 256 MB, t=4, p=4** (é o segredo
   fraco, com 10^8 candidatas, então o mais caro) e **senha mestra / frase de
   recuperação com 128 MB, t=3, p=4**. Elas vivem só na memória do processo
-  main: zeradas no lock e no auto-lock de 5 minutos, nunca por IPC, nunca em
-  log. Erros do cofre não ecoam senha, PIN ou frase.
+  main, dentro do `VaultSessionManager` (Singleton, `src/main/session.ts`),
+  que zera o Buffer no lock, no auto-lock de 5 minutos e no encerramento do
+  app; nunca passam por IPC e nunca aparecem em log. Erros do cofre não ecoam
+  senha, PIN ou frase.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
   chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 3) guarda cada chave
   embrulhada com o custo do Argon2id daquele método, a trava exponencial e o
@@ -70,9 +72,10 @@ contrário).
 - **Janela e sessão contidas**: a navegação do renderer fica presa na página do
   app (`will-navigate` recusa salto para outra URL), `window.open` não cria
   janela dentro do app, toda permissão web da sessão é negada no renderer
-  menos o clipboard (necessário para copiar credenciais), DevTools está
-  desligado no app empacotado e o conteúdo copiado expira sozinho do clipboard
-  após 30 s (salvo cópia posterior do usuário).
+  (a cópia de credenciais passa pelo canal `clipboard:copy` e usa o clipboard
+  nativo no processo main, sem pedir permissão), DevTools está desligado no app
+  empacotado e o conteúdo copiado expira sozinho do clipboard após 30 s (salvo
+  cópia posterior do usuário).
 - **IPC fechado por origem**: todo handler confere `event.senderFrame` contra a
   página oficial do app (scheme `guardinha://` em produção ou dev server do
   Vite), bloqueando a mensagem antes do domínio tocar.

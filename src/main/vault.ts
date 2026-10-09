@@ -16,18 +16,10 @@ import {
   validateMasterPasswordFormat,
   validatePinFormat,
 } from '@zero/main/auth';
-import {
-  createVaultKey,
-  ensureVaultStructure,
-  initManifest,
-  isVaultDirUnavailable,
-  readVaultContainer,
-  vaultExists,
-  writeVaultContainer,
-} from '@zero/main/storage';
+import { vaultStorage } from '@zero/main/facade';
+import { vaultSession } from '@zero/main/session';
 import { setupVaultDirectory } from '@zero/main/privilege';
 import { evaluateMaster, evaluatePhrase, evaluatePin } from '@zero/shared';
-import { sealManifest } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
 import type { VaultContainerData, VaultKdfParams, WrappedMethod } from '@zero/main/container';
 import type { PersistedAuthState } from '@zero/main/storage';
@@ -40,9 +32,6 @@ import type {
   VaultStatus,
 } from '@zero/types';
 
-/** Trava automática após 5 minutos sem operação no cofre. */
-const IDLE_LOCK_MS = 5 * 60 * 1000;
-
 /**
  * Custo do Argon2id para um método de desbloqueio: o PIN de 8 dígitos é o
  * segredo fraco (10^8 candidatas offline) e por isso recebe o perfil mais caro;
@@ -51,10 +40,6 @@ const IDLE_LOCK_MS = 5 * 60 * 1000;
 function kdfFor(kind: UnlockKind | 'recovery'): VaultKdfParams {
   return { algo: 'argon2id', ...kdfProfileFor(kind) };
 }
-
-/** Chave do cofre em memória; só existe com o cofre desbloqueado. */
-let sessionKey: Buffer | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function statusFrom(auth: PersistedAuthState, exists: boolean, locked: boolean): VaultStatus {
   return {
@@ -68,40 +53,27 @@ function statusFrom(auth: PersistedAuthState, exists: boolean, locked: boolean):
 
 export function getStatus(): VaultStatus {
   const auth = loadAuthState();
-  return statusFrom(auth, vaultExists(), sessionKey === null);
+  return statusFrom(auth, vaultStorage.exists(), !vaultSession().isUnlocked());
 }
 
 export function isUnlocked(): boolean {
-  return sessionKey !== null;
+  return vaultSession().isUnlocked();
 }
 
 /** Rearma a trava automática (chamado a cada operação bem-sucedida). */
 export function touch(): void {
-  if (sessionKey === null) return;
-  if (idleTimer !== null) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    lock();
-  }, IDLE_LOCK_MS);
+  vaultSession().touch();
 }
 
+/** Bloqueia o cofre: a chave sai da memória e o auto-lock é cancelado. */
 export function lock(): VaultStatus {
-  if (sessionKey !== null) {
-    sessionKey.fill(0);
-    sessionKey = null;
-  }
-  if (idleTimer !== null) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
+  vaultSession().wipe();
   return getStatus();
 }
 
 /** Chave da sessão corrente; lança o erro localizado se o cofre estiver bloqueado. */
 export function requireSessionKey(): Buffer {
-  if (sessionKey === null) {
-    throw new Error(currentMessages().errors.vaultLocked);
-  }
-  return sessionKey;
+  return vaultSession().requireKey();
 }
 
 function formatCountdown(ms: number): string {
@@ -145,7 +117,7 @@ async function upgradeMethod(
   if (current === undefined || isSameKdf(current.kdf, target)) return;
   try {
     container.methods[kind] = await wrapKey(vaultKey, credential, target);
-    writeVaultContainer(container);
+    vaultStorage.writeContainer(container);
   } catch {
     // escrita indisponível (ex.: sem sudo em /var/lib); tenta na próxima vez
   }
@@ -174,12 +146,12 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
   if (evaluatePhrase(recoveryPhrase).blocked) {
     return { ok: false, error: m.errors.trivialPhrase, status: getStatus() };
   }
-  if (vaultExists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
+  if (vaultStorage.exists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
 
   try {
-    ensureVaultStructure();
+    vaultStorage.ensureStructure();
   } catch (error) {
-    if (!isVaultDirUnavailable(error)) {
+    if (!vaultStorage.isDirUnavailable(error)) {
       const message = error instanceof Error ? error.message : m.errors.internal;
       return { ok: false, error: message, status: getStatus() };
     }
@@ -188,15 +160,17 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
       return { ok: false, error: m.errors.vaultAuthCancelled, status: getStatus() };
     }
     try {
-      ensureVaultStructure();
+      vaultStorage.ensureStructure();
     } catch (retryError) {
       const message = retryError instanceof Error ? retryError.message : m.errors.internal;
       return { ok: false, error: message, status: getStatus() };
     }
     // a raiz agora existe: refaz a checagem (migra cofre antigo, se houver)
-    if (vaultExists()) return { ok: false, error: m.errors.vaultExists, status: getStatus() };
+    if (vaultStorage.exists()) {
+      return { ok: false, error: m.errors.vaultExists, status: getStatus() };
+    }
   }
-  const vaultKey = createVaultKey();
+  const vaultKey = vaultStorage.createKey();
 
   const methods: VaultContainerData['methods'] = {
     master: await wrapKey(vaultKey, input.masterPassword, kdfFor('master')),
@@ -211,12 +185,12 @@ export async function createVault(input: CreateVaultInput): Promise<VaultResult>
     attempts: 0,
     lockUntil: null,
     methods,
-    manifest: sealManifest(vaultKey, []),
+    manifest: null,
   };
-  writeVaultContainer(container);
-
-  sessionKey = vaultKey;
-  touch();
+  vaultStorage.writeContainer(container);
+  // sella o manifesto vazio e entrega a chave à sessão (Singleton)
+  vaultStorage.initManifest(vaultKey);
+  vaultSession().adopt(vaultKey);
 
   return { ok: true, status: getStatus() };
 }
@@ -230,7 +204,7 @@ function wrongCredentialError(kind: UnlockKind): string {
 /** Desbloqueia o cofre com senha mestra ou PIN. */
 export async function unlock(input: UnlockInput): Promise<VaultResult> {
   const m = currentMessages();
-  const container = readVaultContainer();
+  const container = vaultStorage.readContainer();
   if (container === null) return fail(m.errors.vaultMissing);
 
   const locked = getLockRemainingMs(loadAuthState());
@@ -260,11 +234,10 @@ export async function unlock(input: UnlockInput): Promise<VaultResult> {
     const vaultKey = Buffer.from(unwrapped.key, 'hex');
     await upgradeMethod(container, input.kind, input.credential, vaultKey);
 
-    lock();
-    sessionKey = vaultKey;
-    initManifest(sessionKey);
+    // a chave nova assume a sessão (zerando a anterior) no Singleton
+    vaultSession().adopt(vaultKey);
+    vaultStorage.initManifest(vaultKey);
     resetAttempts();
-    touch();
     return { ok: true, status: getStatus() };
   } catch {
     const auth = registerFailedAttempt();
@@ -278,7 +251,7 @@ export async function unlock(input: UnlockInput): Promise<VaultResult> {
  */
 export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
   const m = currentMessages();
-  const container = readVaultContainer();
+  const container = vaultStorage.readContainer();
   if (container === null) return fail(m.errors.vaultMissing);
 
   const locked = getLockRemainingMs(loadAuthState());
@@ -308,13 +281,12 @@ export async function resetPin(input: ResetPinInput): Promise<VaultResult> {
     if (recovery !== undefined && !isSameKdf(recovery.kdf, kdfFor('recovery'))) {
       container.methods.recovery = await wrapKey(vaultKey, phrase, kdfFor('recovery'));
     }
-    writeVaultContainer(container);
+    vaultStorage.writeContainer(container);
 
-    lock();
-    sessionKey = vaultKey;
-    initManifest(sessionKey);
+    // a chave nova assume a sessão (zerando a anterior) no Singleton
+    vaultSession().adopt(vaultKey);
+    vaultStorage.initManifest(vaultKey);
     resetAttempts();
-    touch();
     return { ok: true, status: getStatus() };
   } catch {
     const auth = registerFailedAttempt();
