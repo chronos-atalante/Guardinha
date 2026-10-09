@@ -1,48 +1,47 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { copyAndAutoClear } from '@zero/renderer/clipboard';
+import type { ElectronApi } from '@zero/types';
+
+/** Contrato completo de `window.api`; só o clipboard é exercitado aqui. */
+function installApi(clipboardCopy: (value: string) => Promise<void>): ElectronApi {
+  const unused = (): Promise<never> => Promise.reject(new Error('não usado neste teste'));
+  const api: ElectronApi = {
+    vault: {
+      status: unused,
+      create: unused,
+      unlock: unused,
+      resetPin: unused,
+      lock: unused,
+      onAutoLocked: () => () => {
+        // auto-lock não é exercitado neste arquivo
+      },
+    },
+    openDomain: unused,
+    clipboard: { copy: clipboardCopy },
+    entries: { list: unused, save: unused, remove: unused },
+    generator: { generate: unused },
+    settings: { get: unused, set: unused },
+  };
+  window.api = api;
+  return api;
+}
 
 describe('copyAndAutoClear', () => {
-  const writeText = vi.fn<(value: string) => Promise<void>>();
-  const readText = vi.fn<() => Promise<string>>();
+  it('delega a cópia para o proxy do processo main', async () => {
+    const copy = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    installApi(copy);
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    writeText.mockReset().mockResolvedValue(undefined);
-    readText.mockReset();
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText, readText },
-      configurable: true,
-    });
-  });
-
-  afterEach(() => {
-    vi.clearAllTimers();
-    vi.useRealTimers();
-  });
-
-  it('limpa o clipboard depois do intervalo quando o valor não mudou', async () => {
-    readText.mockResolvedValue('senha-copiada');
     await copyAndAutoClear('senha-copiada');
-    expect(writeText).toHaveBeenCalledWith('senha-copiada');
 
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(writeText).toHaveBeenLastCalledWith('');
+    expect(copy).toHaveBeenCalledWith('senha-copiada');
   });
 
-  it('preserva o clipboard se o usuário copiou outra coisa depois', async () => {
-    readText.mockResolvedValue('outra-coisa');
-    await copyAndAutoClear('senha');
+  it('propaga o erro do main sem copiar nada pela tela', async () => {
+    const copy = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockRejectedValue(new Error('bloqueado'));
+    installApi(copy);
 
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect(writeText).not.toHaveBeenCalledWith('');
-  });
-
-  it('limpa mesmo sem conseguir ler o clipboard', async () => {
-    readText.mockRejectedValue(new Error('leitura negada'));
-    await copyAndAutoClear('senha');
-
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(writeText).toHaveBeenLastCalledWith('');
+    await expect(copyAndAutoClear('senha')).rejects.toThrow('bloqueado');
   });
 });

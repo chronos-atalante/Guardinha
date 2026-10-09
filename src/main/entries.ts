@@ -1,45 +1,10 @@
-import { decryptRecord, encryptRecord, randomUuid } from '@zero/main/crypto';
 import { validateDomainFormat, validateUsernameFormat } from '@zero/main/auth';
-import {
-  deleteEntry,
-  listEntryIds,
-  readEntryPayload,
-  updateManifest,
-  verifyManifest,
-  writeEntryPayload,
-} from '@zero/main/storage';
+import { vaultStorage } from '@zero/main/facade';
 import { requireSessionKey, touch } from '@zero/main/vault';
 import { currentMessages } from '@zero/main/i18n';
 import type { Credential, CredentialInput } from '@zero/types';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Valida a forma decifrada antes de usar (arquivo corrompido vira null). */
-function asCredential(value: object): Credential | null {
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record.id !== 'string' ||
-    typeof record.title !== 'string' ||
-    typeof record.username !== 'string' ||
-    typeof record.password !== 'string' ||
-    typeof record.domain !== 'string' ||
-    typeof record.notes !== 'string' ||
-    typeof record.createdAt !== 'number' ||
-    typeof record.updatedAt !== 'number'
-  ) {
-    return null;
-  }
-  return {
-    id: record.id,
-    title: record.title,
-    username: record.username,
-    password: record.password,
-    domain: record.domain,
-    notes: record.notes,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
 
 /**
  * Todas as credenciais decifradas, da mais recente para a mais antiga.
@@ -48,19 +13,8 @@ function asCredential(value: object): Credential | null {
  */
 export function listEntries(): Credential[] {
   const key = requireSessionKey();
-  const m = currentMessages();
-  verifyManifest(key);
-  const records: Credential[] = [];
-  for (const id of listEntryIds()) {
-    let record: Credential | null;
-    try {
-      record = asCredential(decryptRecord(readEntryPayload(id), key));
-    } catch {
-      throw new Error(m.errors.vaultTampered);
-    }
-    if (record === null) throw new Error(m.errors.vaultTampered);
-    records.push(record);
-  }
+  vaultStorage.verifyManifest(key);
+  const records = vaultStorage.listIds().map((id) => vaultStorage.readRecord(id, key));
   records.sort((a, b) => b.updatedAt - a.updatedAt);
   touch();
   return records;
@@ -78,19 +32,14 @@ export function saveEntry(input: CredentialInput): Credential[] {
   if (!validateDomainFormat(domain)) throw new Error(m.errors.invalidDomain);
 
   const now = Date.now();
-  let id = randomUuid();
+  let id = vaultStorage.newId();
   let createdAt = now;
 
   if (input.id !== undefined && input.id !== '') {
     if (!UUID_PATTERN.test(input.id)) throw new Error(m.errors.invalidId);
-    if (!listEntryIds().includes(input.id)) throw new Error(m.errors.entryNotFound);
-    let stored: Credential | null;
-    try {
-      stored = asCredential(decryptRecord(readEntryPayload(input.id), key));
-    } catch {
-      stored = null;
-    }
-    if (stored === null) throw new Error(m.errors.vaultTampered);
+    if (!vaultStorage.listIds().includes(input.id)) throw new Error(m.errors.entryNotFound);
+    // a fachada já responde adulteração quando o arquivo não decifra
+    const stored = vaultStorage.readRecord(input.id, key);
     id = input.id;
     createdAt = stored.createdAt;
   }
@@ -105,8 +54,7 @@ export function saveEntry(input: CredentialInput): Credential[] {
     createdAt,
     updatedAt: now,
   };
-  writeEntryPayload(id, encryptRecord(record, key));
-  updateManifest(key);
+  vaultStorage.writeRecord(record, key);
   touch();
   return listEntries();
 }
@@ -116,9 +64,8 @@ export function removeEntry(id: string): Credential[] {
   const key = requireSessionKey();
   const m = currentMessages();
   if (!UUID_PATTERN.test(id)) throw new Error(m.errors.invalidId);
-  if (!listEntryIds().includes(id)) throw new Error(m.errors.entryNotFound);
-  deleteEntry(id);
-  updateManifest(key);
+  if (!vaultStorage.listIds().includes(id)) throw new Error(m.errors.entryNotFound);
+  vaultStorage.removeRecord(id, key);
   touch();
   return listEntries();
 }

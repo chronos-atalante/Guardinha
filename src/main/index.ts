@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
 import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
+import { activityMonitor } from '@zero/main/activity';
 import { validateDomainFormat } from '@zero/main/auth';
 import { removeEntry, saveEntry, listEntries } from '@zero/main/entries';
 import { generateHighEntropyPassword } from '@zero/main/crypto';
+import { secureClipboard } from '@zero/main/clipboard';
 import { loadSettings, saveSettings } from '@zero/main/settings';
 import { currentMessages } from '@zero/main/i18n';
 import type {
@@ -82,12 +84,13 @@ function createWindow(): void {
 }
 
 /**
- * Nega toda permissão web do renderer (mídia, geolocalização, notificações…);
- * só o clipboard passa, para copiar usuário/senha e a limpeza automática.
+ * Nega toda permissão web do renderer (mídia, geolocalização, notificações,
+ * clipboard…): a cópia de credenciais passa pelo canal `clipboard:copy` e usa o
+ * clipboard nativo no main, sem pedir permissão nenhuma ao sistema.
  */
 function registerPermissionPolicy(): void {
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'clipboard-read' || permission === 'clipboard-sanitized-write');
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
   });
 }
 
@@ -243,6 +246,15 @@ function registerIpc(): void {
     return removeEntry(id);
   });
 
+  /** Copia para o clipboard nativo e limpa sozinho 30 s depois (no main). */
+  ipcMain.handle('clipboard:copy', (event, value: string) => {
+    assertAppFrame(event);
+    if (typeof value !== 'string') {
+      throw new Error(currentMessages().errors.internal);
+    }
+    return secureClipboard.copy(value);
+  });
+
   ipcMain.handle('generator:generate', (event, options: GeneratorOptions) => {
     assertAppFrame(event);
     const m = currentMessages();
@@ -277,6 +289,18 @@ function removeApplicationMenu(): void {
   Menu.setApplicationMenu(null);
 }
 
+/**
+ * Ouvinte do `ActivityMonitor` (Observer): o auto-lock zera a chave no main e
+ * empurra o novo status para o renderer no mesmo instante (o renderer não
+ * precisa esperar o polling de 15 s para voltar à tela de autenticação).
+ */
+function registerActivityObserver(): void {
+  activityMonitor.subscribe(() => {
+    const status = lock();
+    mainWindow?.webContents.send('vault:auto-locked', status);
+  });
+}
+
 const gotLock = app.requestSingleInstanceLock();
 
 if (!gotLock) {
@@ -296,6 +320,7 @@ if (!gotLock) {
       registerIpc();
       removeApplicationMenu();
       registerPermissionPolicy();
+      registerActivityObserver();
       createWindow();
 
       app.on('activate', () => {
@@ -305,6 +330,17 @@ if (!gotLock) {
     .catch((error: unknown) => {
       console.error('Falha ao iniciar o aplicativo:', error);
     });
+
+  // Encerramento de sessão: a chave sai da memória junto com o processo e o
+  // temporizador do clipboard é cancelado (o wipe roda antes de qualquer I/O).
+  app.on('before-quit', () => {
+    try {
+      lock();
+    } catch (error) {
+      console.error('Falha ao bloquear o cofre no encerramento:', error);
+    }
+    secureClipboard.dispose();
+  });
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

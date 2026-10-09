@@ -36,8 +36,12 @@ export function Home({ onToast }: HomeProps): JSX.Element {
   }, [reload]);
 
   const handleCopy = async (value: string): Promise<void> => {
-    await copyAndAutoClear(value);
-    onToast(m.app.toastCopied);
+    try {
+      await copyAndAutoClear(value);
+      onToast(m.app.toastCopied);
+    } catch (caught) {
+      onToast(errorMessage(caught, m.errors.internal));
+    }
   };
 
   const handleOpenSite = async (domain: string): Promise<void> => {

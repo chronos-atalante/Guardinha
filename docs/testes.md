@@ -1,8 +1,8 @@
 # Testes
 
-Suíte em Vitest, com o renderer em jsdom e o main em Node. São 12 arquivos e
-97 testes; a duração gira em torno de 45 s porque o Argon2id roda de verdade
-(perfis de 128 e 256 MiB) nos testes de cofre.
+Suíte em Vitest, com o renderer em jsdom e o main em Node. São 19 arquivos e
+144 testes; a duração gira em torno de dois minutos porque o Argon2id roda de
+verdade (perfis de 128 e 256 MiB) nos testes de cofre.
 
 ## Como rodar
 
@@ -17,20 +17,27 @@ auditoria de dependências e shellcheck. Rode os dois antes de concluir.
 
 ## Arquivos
 
-| Arquivo                                | O que cobre                                                                                   |
-| -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `tests/main/auth.test.ts`              | Escala da trava (10 s até 24 h) e validações de formato                                       |
-| `tests/main/container.test.ts`         | Formato do `vault.zkv` e `.zke`: roundtrip, v2, v3, faixa do KDF, lixo e truncamento          |
-| `tests/main/crypto.test.ts`            | Argon2id, perfis de custo, AES-256-GCM, gerador e frase                                       |
-| `tests/main/storage.test.ts`           | Migrações (JSON legado, XDG, layout oculto), permissões e uuid seguro                         |
-| `tests/main/vault.test.ts`             | Ciclo de vida completo: criar, falhar, travar, editar, redefinir, manifesto e subida de custo |
-| `tests/main/privilege.test.ts`         | `pkexec` só com o helper do pacote e nunca em teste/dev                                       |
-| `tests/main/create-permission.test.ts` | Criação sem permissão responde `vaultAuthCancelled`                                           |
-| `tests/main/window.test.ts`            | Navegação presa, `window.open`, permissões da sessão e canais IPC                             |
-| `tests/messages/parity.test.ts`        | Paridade de chaves e aridade entre pt-BR e en                                                 |
-| `tests/renderer/App.test.tsx`          | Telas: desbloqueio, aba mestra após 3 falhas, lista, gerador, configurações e criação         |
-| `tests/renderer/clipboard.test.ts`     | Limpeza em 30 s e respeito a cópia posterior do usuário                                       |
-| `tests/shared/strength.test.ts`        | Regras de nota e de bloqueio da checagem de força                                             |
+| Arquivo                                | O que cobre                                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `tests/main/auth.test.ts`              | Escala da trava (10 s até 24 h) e validações de formato                                        |
+| `tests/main/container.test.ts`         | Formato do `vault.zkv` e `.zke`: roundtrip, v2, v3, faixa do KDF, lixo e truncamento           |
+| `tests/main/crypto.test.ts`            | Argon2id, perfis de custo, AES-256-GCM, gerador e frase                                        |
+| `tests/main/storage.test.ts`           | Migrações (JSON legado, XDG, layout oculto), permissões e uuid seguro                          |
+| `tests/main/facade.test.ts`            | Fachada de persistência: roundtrip de credencial, forma inválida e arquivo injetado            |
+| `tests/main/session.test.ts`           | Singleton da sessão: chave, zeragem de memória e repasse do auto-lock ao monitor               |
+| `tests/main/activity.test.ts`          | `ActivityMonitor` (Observer): emite no idle, rearma, cancela assinatura e `stop`               |
+| `tests/main/unwrapping.test.ts`        | Factory de desembrulho: roundtrip por tipo, custo por método e GCM recusando credencial errada |
+| `tests/main/unlock.test.ts`            | Cadeia de desbloqueio: libera chave, conta tentativa, formato barato e trava antes do Argon2id |
+| `tests/main/clipboard.test.ts`         | `SecureClipboardProxy`: limpeza em 30 s, cópia posterior, reprogramação e `dispose`            |
+| `tests/main/vault.test.ts`             | Ciclo de vida completo: criar, falhar, travar, editar, redefinir, manifesto e subida de custo  |
+| `tests/main/privilege.test.ts`         | `pkexec` só com o helper do pacote e nunca em teste/dev                                        |
+| `tests/main/create-permission.test.ts` | Criação sem permissão responde `vaultAuthCancelled`                                            |
+| `tests/main/window.test.ts`            | Navegação presa, `window.open`, permissões da sessão, canais IPC e push de auto-lock           |
+| `tests/messages/parity.test.ts`        | Paridade de chaves e aridade entre pt-BR e en                                                  |
+| `tests/renderer/App.test.tsx`          | Telas: desbloqueio, aba mestra após 3 falhas, lista, gerador, configurações e criação          |
+| `tests/renderer/clipboard.test.ts`     | Delegação da cópia para o main pelo canal `clipboard:copy`                                     |
+| `tests/shared/strength.test.ts`        | Regras de nota e de bloqueio da checagem de força                                              |
+| `tests/shared/strategy.test.ts`        | `strengthFor` (Strategy): régua por tipo e paridade com as funções puras                       |
 
 Apoios: `tests/mocks/electron.ts` (stub do `electron` aplicado por alias),
 `tests/setup-env.ts` (cria um `HOME` temporário por processo e aponta o cofre
@@ -46,6 +53,9 @@ teste).
 - Temporizadores: use `vi.useFakeTimers()` para a trava exponencial e
   `vi.useRealTimers()` no fim do teste (o `setup.ts` já restaura, mas o teste
   que muda o relógio deve devolver).
+- Argon2id real: testes que criam cofre (`createVault`, `makeContainer`)
+  derivam 128 e 256 MB; herdam o teto global de 120 s do `vitest.config.mts`
+  e não devem baixá-lo, sob pena de flake sob carga do desktop.
 - Cofre e arquivos sempre em diretório temporário: nunca escreva em
   `/var/lib` em teste (o `setup-env.ts` já isola; `create-permission` e
   `privilege` cobrem o caminho sem permissão).

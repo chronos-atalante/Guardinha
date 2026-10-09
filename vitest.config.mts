@@ -26,8 +26,11 @@ export default defineConfig({
     pool: 'forks',
     clearMocks: false,
     // Argon2id real (128 MB, t=3 e 256 MB, t=4) roda nos testes de cofre: sob
-    // carga o KDF passa de 5 s e o limite padrão do Vitest vira falso positivo.
-    testTimeout: 30_000,
+    // carga do desktop um chute de PIN passa de 15 s e um cofre inteiro (três
+    // derivações) de 45 s, então o teto precisa de folga para não virar falso
+    // positivo. Os hooks seguem a mesma régua (makeContainer também deriva).
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
     setupFiles: ['tests/setup-env.ts', 'tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
     coverage: {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserWindow, ipcMain, session, shell } from '../mocks/electron.ts';
+import { app, BrowserWindow, clipboard, ipcMain, session, shell } from '../mocks/electron.ts';
+import { activityMonitor, IDLE_LOCK_MS } from '@zero/main/activity';
 import '@zero/main/index';
 
 /**
@@ -58,23 +59,69 @@ describe('guardas de navegação e sessão', () => {
     expect(shell.openExternal).toHaveBeenCalledTimes(1);
   });
 
-  it('permissões da sessão negam tudo menos o clipboard', () => {
+  it('permissões da sessão negam tudo (o clipboard vive no main)', () => {
     expect(session.defaultSession.setPermissionRequestHandler).toHaveBeenCalledTimes(1);
     const policy = session.defaultSession.setPermissionRequestHandler.mock.calls[0]?.[0];
     expect(policy).toBeTypeOf('function');
 
     const grant = vi.fn<(granted: boolean) => void>();
-    policy?.(null, 'geolocation', grant, null);
-    expect(grant).toHaveBeenCalledWith(false);
+    for (const permission of [
+      'geolocation',
+      'media',
+      'clipboard-read',
+      'clipboard-sanitized-write',
+      'notifications',
+    ]) {
+      policy?.(null, permission, grant, null);
+    }
+    expect(grant).toHaveBeenCalledTimes(5);
+    expect(grant.mock.calls.every(([value]) => !value)).toBe(true);
+  });
 
-    policy?.(null, 'media', grant, null);
-    expect(grant).toHaveBeenLastCalledWith(false);
+  it('canal clipboard:copy copia pelo proxy do main', async () => {
+    const handler = ipcMain.handle.mock.calls.find(
+      ([channel]) => channel === 'clipboard:copy',
+    )?.[1];
+    expect(handler).toBeTypeOf('function');
 
-    policy?.(null, 'clipboard-sanitized-write', grant, null);
-    expect(grant).toHaveBeenLastCalledWith(true);
+    clipboard.writeText.mockClear();
+    await handler?.({ senderFrame: { url: 'guardinha://app/index.html' } }, 'senha-copiada');
+    expect(clipboard.writeText).toHaveBeenCalledWith('senha-copiada');
+  });
 
-    policy?.(null, 'clipboard-read', grant, null);
-    expect(grant).toHaveBeenLastCalledWith(true);
+  it('canal clipboard:copy recusa valor que não seja texto', () => {
+    const handler = ipcMain.handle.mock.calls.find(
+      ([channel]) => channel === 'clipboard:copy',
+    )?.[1];
+    clipboard.writeText.mockClear();
+    expect(() =>
+      handler?.({ senderFrame: { url: 'guardinha://app/index.html' } }, { senha: 'x' }),
+    ).toThrow();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it('encerramento do app bloqueia o cofre e cancela a limpeza do clipboard', () => {
+    const handler = app.on.mock.calls.find(([event]) => event === 'before-quit')?.[1];
+    expect(handler).toBeTypeOf('function');
+    expect(() => handler?.()).not.toThrow();
+  });
+
+  it('auto-lock empurra vault:auto-locked para o renderer', async () => {
+    const win = await waitForWindow();
+    const send = vi.spyOn(win.webContents, 'send').mockClear();
+
+    vi.useFakeTimers();
+    try {
+      // o ouvinte do ActivityMonitor foi registrado no whenReady (entrypoint)
+      activityMonitor.touch();
+      await vi.advanceTimersByTimeAsync(IDLE_LOCK_MS);
+      expect(send).toHaveBeenCalledWith(
+        'vault:auto-locked',
+        expect.objectContaining({ locked: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('registra os canais de IPC do cofre', () => {
@@ -82,5 +129,6 @@ describe('guardas de navegação e sessão', () => {
     expect(channels).toContain('vault:unlock');
     expect(channels).toContain('entries:list');
     expect(channels).toContain('shell:open-domain');
+    expect(channels).toContain('clipboard:copy');
   });
 });

@@ -28,11 +28,33 @@ credencial (`credenciais.md`).
 | `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).                                   |
 | `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                                                       |
 
+### Push do auto-lock (evento main → renderer)
+
+| Método                   | Canal               | Payload → retorno      | Descrição                                                                                        |
+| ------------------------ | ------------------- | ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `onAutoLocked(listener)` | `vault:auto-locked` | `VaultStatus` → `void` | Ouvinte do auto-lock: o main empurra o status novo quando a chave sai da memória por ociosidade. |
+
+`onAutoLocked` registra um ouvinte de evento (não é `invoke`/`handle`) e
+devolve a função que cancela a assinatura; o App chama
+`unsubscribe()` no cleanup do `useEffect`. O renderer ainda consulta
+`vault.status()` a cada 15 s como rede de segurança, mas a volta à tela de
+autenticação no auto-lock é imediata.
+
 ## `window.api.openDomain`
 
 | Método               | Canal               | Payload → retorno | Descrição                                                                                   |
 | -------------------- | ------------------- | ----------------- | ------------------------------------------------------------------------------------------- |
 | `openDomain(domain)` | `shell:open-domain` | `string → void`   | Abre o domínio da credencial no navegador padrão (`shell.openExternal`; só `http`/`https`). |
+
+## `window.api.clipboard`
+
+| Método        | Canal            | Payload → retorno | Descrição                                                                                                                  |
+| ------------- | ---------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `copy(value)` | `clipboard:copy` | `string → void`   | Copia no clipboard nativo e limpa sozinho 30 s depois (`SecureClipboardProxy`, no main; salvo cópia posterior do usuário). |
+
+A cópia mora no processo main: o renderer não pede permissão de clipboard ao
+sistema e o temporizador sobrevive a uma recarga da página. O canal só aceita
+texto (o handler recusa outro tipo de payload).
 
 ## `window.api.entries`
 

@@ -40,8 +40,12 @@ contrário).
   credencial, sendo **PIN de 8 dígitos com 256 MB, t=4, p=4** (é o segredo
   fraco, com 10^8 candidatas, então o mais caro) e **senha mestra / frase de
   recuperação com 128 MB, t=3, p=4**. Elas vivem só na memória do processo
-  main: zeradas no lock e no auto-lock de 5 minutos, nunca por IPC, nunca em
-  log. Erros do cofre não ecoam senha, PIN ou frase.
+  main, dentro do `VaultSessionManager` (Singleton, `src/main/session.ts`),
+  que zera o Buffer no lock, no auto-lock de 5 minutos (temporizador do
+  `ActivityMonitor`, em `src/main/activity.ts`) e no encerramento do
+  app; nunca passam por IPC e nunca aparecem em log. Erros do cofre não ecoam
+  senha, PIN ou frase, e o desbloqueio é uma cadeia (`src/main/unlock.ts`) em
+  que a trava exponencial corta antes da derivação Argon2id.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
   chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 3) guarda cada chave
   embrulhada com o custo do Argon2id daquele método, a trava exponencial e o
@@ -70,9 +74,10 @@ contrário).
 - **Janela e sessão contidas**: a navegação do renderer fica presa na página do
   app (`will-navigate` recusa salto para outra URL), `window.open` não cria
   janela dentro do app, toda permissão web da sessão é negada no renderer
-  menos o clipboard (necessário para copiar credenciais), DevTools está
-  desligado no app empacotado e o conteúdo copiado expira sozinho do clipboard
-  após 30 s (salvo cópia posterior do usuário).
+  (a cópia de credenciais passa pelo canal `clipboard:copy` e usa o clipboard
+  nativo no processo main, sem pedir permissão), DevTools está desligado no app
+  empacotado e o conteúdo copiado expira sozinho do clipboard após 30 s (salvo
+  cópia posterior do usuário).
 - **IPC fechado por origem**: todo handler confere `event.senderFrame` contra a
   página oficial do app (scheme `guardinha://` em produção ou dev server do
   Vite), bloqueando a mensagem antes do domínio tocar.
@@ -89,6 +94,16 @@ contrário).
   (push/PR para `main` e semanalmente).
 - **Sem servidor intermediário**: o app não abre conexão de rede alguma: não
   há endpoint do Guardinha a atacar; credenciais nunca saem da máquina.
+- **Confinamento AppArmor**: o `.deb` instala um perfil restritivo em
+  `/etc/apparmor.d/guardinha` (origem `build/apparmor-profile`, declarado em
+  `build.deb.appArmorProfile`) sobre o executável
+  `/opt/Guardinha/guardinha`. Ele nega leitura de arquivos do usuário, nega
+  escrita fora dos diretórios do app, do cofre e do `$XDG_CONFIG_HOME` do
+  app, nega rede `inet`/`inet6` (só `unix` e `netlink`, já que o app é
+  offline) e nega execução de qualquer binário fora da lista curta do pacote
+  (`chrome-sandbox`, `chrome_crashpad_handler`) e dos dois helpers do sistema
+  (`pkexec`, `xdg-open`). Validado em `enforce` com zero negações de operação
+  legítima no ciclo de vida completo do app.
 
 ## Riscos aceitos (com justificativa)
 
@@ -102,6 +117,31 @@ contrário).
   moderno; senha mestra (24 caracteres) e frase (12+ palavras) têm entropia
   própria e ficam em 128 MB / t=3. O PIN de 8 dígitos continua sendo o limite
   aceito desse cofre.
+- **A trava exponencial protege contra o app, não contra o disco**: o campo
+  `attempts` do `vault.zkv` mora num arquivo com dono usuário, então quem já
+  tenha o arquivo pode zerá-lo e chutar à vontade. A trava serve para conter
+  tentativas pela interface do app (e recusa a espera sem nem chegar a rodar o
+  Argon2); a defesa real contra atacante com o arquivo e tempo ilimitado é o
+  custo do Argon2id, medido em ~2,1 s por chute de PIN com a máquina quieta
+  (sob carga do desktop a medição sobe para ~4 a ~16 s, nunca para baixo).
+  Nada a mudar no código: trava online mais KDF caro é o modelo correto, e a
+  trava não é considerada barreira de segurança contra leitura do disco.
+- **Chave em memória enquanto o cofre está aberto**: com o cofre destravado,
+  qualquer código rodando como o mesmo usuário lê `/proc/<pid>/mem` e
+  recupera a chave de 32 bytes. Inerente a aplicativo desktop com cofre local
+  (não há TPM nem cofre de hardware no alvo). Mitigado por zerar a chave no
+  lock manual e no auto-lock de 5 minutos, o que limita a janela de exposição;
+  rodar como outro usuário já está fora do escopo (abaixo).
+- **`/usr/bin/xdg-open` sai do confinamento**: para `shell.openExternal` (o
+  botão que abre o domínio da credencial no navegador) funcionar, o perfil
+  concede `ux` ao abridor do sistema: a cadeia inteira (shell, `gio`,
+  `gio-launch-desktop` e o navegador) roda sem confinamento depois da execução.
+  Sem isso o wrapper do navegador é negado e o recurso quebra. O que isso
+  entrega a um atacante que já rode dentro do app é abrir um endereço ou um
+  tipo de arquivo já registrado no sistema (o mesmo que o próprio app faz);
+  não há como criar o handler pelo perfil, pois escrever em
+  `~/.local/share/applications` continua negado. Aceito por ser o único caminho
+  suportado para abrir URLs no Linux sem reescrever o mecanismo do sistema.
 - **`GUARDINHA_VAULT_DIR` / `GUARDINHA_VAR_LIB`**: variáveis de ambiente
   redirecionam o cofre (usadas por testes e `npm run dev`). Quem controla o
   ambiente do processo do usuário já está no mesmo nível de ameaça que a chave

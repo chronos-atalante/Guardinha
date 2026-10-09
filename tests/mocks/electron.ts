@@ -86,6 +86,11 @@ export const shell = {
   openExternal: vi.fn<(url: string) => Promise<void>>(() => Promise.resolve()),
 };
 
+export const clipboard = {
+  writeText: vi.fn<(text: string) => Promise<void>>(() => Promise.resolve()),
+  readText: vi.fn<() => Promise<string>>(() => Promise.resolve('')),
+};
+
 export type PermissionRequestHandler = (
   webContents: unknown,
   permission: string,
@@ -119,5 +124,7 @@ export function resetElectronMock(): void {
   BrowserWindow.fromWebContents.mockClear();
   app.getName.mockClear();
   shell.openExternal.mockClear();
+  clipboard.writeText.mockClear();
+  clipboard.readText.mockReset().mockResolvedValue('');
   session.defaultSession.setPermissionRequestHandler.mockClear();
 }

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 import type { ElectronApi } from '@zero/types';
 
 const api: ElectronApi = {
@@ -8,8 +9,19 @@ const api: ElectronApi = {
     unlock: (input) => ipcRenderer.invoke('vault:unlock', input),
     resetPin: (input) => ipcRenderer.invoke('vault:resetPin', input),
     lock: () => ipcRenderer.invoke('vault:lock'),
+    onAutoLocked: (listener) => {
+      const handler = (_event: IpcRendererEvent, status: Parameters<typeof listener>[0]): void =>
+        listener(status);
+      ipcRenderer.on('vault:auto-locked', handler);
+      return () => {
+        ipcRenderer.removeListener('vault:auto-locked', handler);
+      };
+    },
   },
   openDomain: (domain) => ipcRenderer.invoke('shell:open-domain', domain),
+  clipboard: {
+    copy: (value) => ipcRenderer.invoke('clipboard:copy', value),
+  },
   entries: {
     list: () => ipcRenderer.invoke('entries:list'),
     save: (entry) => ipcRenderer.invoke('entries:save', entry),

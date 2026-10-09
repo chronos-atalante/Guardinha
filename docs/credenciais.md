@@ -51,7 +51,9 @@ o conjunto de caracteres. Comprimento 0 devolve vazio e a tela avisa.
 ## Checagem de força
 
 O cálculo mora em `src/shared/strength.ts`, um módulo **puro** importado pelo
-renderer (medidor ao vivo) e pelo main (recusa na criação). O renderer é só
+renderer (medidor ao vivo) e pelo main (recusa na criação). A escolha da régua
+por tipo de credencial (senha, mestra, PIN e frase) é a Strategy em
+`src/shared/strategy.ts` (`strengthFor(kind)`). O renderer é só
 conveniência: quem decide é o processo main.
 
 ### Nota
@@ -114,6 +116,8 @@ chave `strength`.
 
 ## Área de transferência
 
-Copiar usuário ou senha usa `navigator.clipboard` e agenda limpeza em 30 s
-(`src/renderer/src/clipboard.ts`). Se o usuário copiar outra coisa nesse
-intervalo, o app não sobrescreve. O mesmo vale para a senha gerada.
+Copiar usuário ou senha passa pelo canal `clipboard:copy` e usa o clipboard
+nativo no processo main (`SecureClipboardProxy`, em `src/main/clipboard.ts`),
+que agenda a limpeza em 30 s. Se o usuário copiar outra coisa nesse intervalo,
+o app não sobrescreve. O mesmo vale para a senha gerada. O renderer não usa
+`navigator.clipboard`: toda permissão web da sessão é negada.

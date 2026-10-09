@@ -21,7 +21,7 @@ Todo texto vem do contexto de idioma (`useMessages()`), nunca embutido no JSX.
 | `Settings`          | Tela de configurações (ainda com aviso de "chega futuramente")        |
 | `Toast`             | Aviso curto de cópia e de sucesso                                     |
 | `i18n.tsx`          | `MessagesProvider`, `useMessages()`, `useLanguage()`, `richText()`    |
-| `clipboard.ts`      | Copia e agenda a limpeza em 30 s                                      |
+| `clipboard.ts`      | Encerra a cópia no canal `clipboard:copy` (limpeza no main)           |
 | `formatters.ts`     | Contagem de palavras, contagem regressiva e erro legível              |
 
 ## Abas da Sidebar

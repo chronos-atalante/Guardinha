@@ -22,9 +22,18 @@ export interface ElectronApi {
     /** Prova posse da frase de recuperação e instala um novo PIN. */
     resetPin: (input: ResetPinInput) => Promise<VaultResult>;
     lock: () => Promise<VaultStatus>;
+    /**
+     * Ouvinte do auto-lock (Observer): o main empurra o status novo quando o
+     * cofre trava sozinho por ociosidade. Devolve a função que cancela.
+     */
+    onAutoLocked: (listener: (status: VaultStatus) => void) => () => void;
   };
   /** Abre o domínio da credencial no navegador padrão do sistema. */
   openDomain: (domain: string) => Promise<void>;
+  clipboard: {
+    /** Copia para o clipboard nativo; some da área de transferência em 30 s. */
+    copy: (value: string) => Promise<void>;
+  };
   entries: {
     list: () => Promise<Credential[]>;
     save: (entry: CredentialInput) => Promise<Credential[]>;

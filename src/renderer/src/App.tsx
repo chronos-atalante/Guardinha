@@ -86,13 +86,20 @@ export default function App(): JSX.Element {
 
   const unlocked = status !== null && status.exists && !status.locked;
 
-  // Rede de segurança: percebe o auto-lock (5 min ocioso) em até 15 s.
+  // Observer: o main avisa no auto-lock. O polling de 15 s fica como rede de
+  // segurança (rede, IPC e renderer podem falhar por conta própria).
   useEffect(() => {
     if (!unlocked) return;
+    const unsubscribe = window.api.vault.onAutoLocked(() => {
+      void refreshStatus();
+    });
     const timer = setInterval(() => {
       void refreshStatus();
     }, 15000);
-    return () => clearInterval(timer);
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
   }, [unlocked, refreshStatus]);
 
   const handleLanguageChange = useCallback((next: Language): void => {
