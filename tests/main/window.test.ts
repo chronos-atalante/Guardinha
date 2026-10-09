@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { app, BrowserWindow, clipboard, ipcMain, session, shell } from '../mocks/electron.ts';
+import { activityMonitor, IDLE_LOCK_MS } from '@zero/main/activity';
 import '@zero/main/index';
 
 /**
@@ -103,6 +104,24 @@ describe('guardas de navegação e sessão', () => {
     const handler = app.on.mock.calls.find(([event]) => event === 'before-quit')?.[1];
     expect(handler).toBeTypeOf('function');
     expect(() => handler?.()).not.toThrow();
+  });
+
+  it('auto-lock empurra vault:auto-locked para o renderer', async () => {
+    const win = await waitForWindow();
+    const send = vi.spyOn(win.webContents, 'send').mockClear();
+
+    vi.useFakeTimers();
+    try {
+      // o ouvinte do ActivityMonitor foi registrado no whenReady (entrypoint)
+      activityMonitor.touch();
+      await vi.advanceTimersByTimeAsync(IDLE_LOCK_MS);
+      expect(send).toHaveBeenCalledWith(
+        'vault:auto-locked',
+        expect.objectContaining({ locked: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('registra os canais de IPC do cofre', () => {

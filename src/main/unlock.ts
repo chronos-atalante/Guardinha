@@ -9,6 +9,7 @@ import {
 import { vaultStorage } from '@zero/main/facade';
 import { currentMessages } from '@zero/main/i18n';
 import { keyUnwrapperFor } from '@zero/main/unwrapping';
+import { formatCountdown } from '@zero/shared';
 import type { VaultContainerData } from '@zero/main/container';
 import type { UnlockInput, VaultResult } from '@zero/types';
 
@@ -68,24 +69,18 @@ function credentialFailure(context: UnlockContext): VaultResult {
   };
 }
 
-function formatCountdown(ms: number): string {
-  const total = Math.ceil(ms / 1000);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
-}
-
 /** 1. Trava exponencial: a espera vale antes de qualquer derivação. */
 class ExponentialLockoutHandler extends UnlockHandler {
   protected process(): VaultResult | null {
-    const remaining = getLockRemainingMs(loadAuthState());
+    const auth = loadAuthState();
+    const remaining = getLockRemainingMs(auth);
     if (remaining <= 0) return null;
     const m = currentMessages();
     // quem está esperando não gasta nova tentativa: a trava não é punição nova
     return {
       ok: false,
       error: m.auth.lockout(formatCountdown(remaining)),
-      status: statusFrom(loadAuthState(), vaultStorage.exists(), true),
+      status: statusFrom(auth, vaultStorage.exists(), true),
     };
   }
 }

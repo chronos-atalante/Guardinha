@@ -38,12 +38,12 @@ function context(
 }
 
 describe('runUnlockChain (Chain of Responsibility)', () => {
-  // criar o cofre custa três derivações Argon2id: sob carga 10 s não bastam
+  // criar o cofre custa três derivações Argon2id: sob carga 60 s não bastam
   beforeAll(async () => {
     if (!vaultStorage.exists()) {
       await createVault({ masterPassword: MASTER, pin: PIN, recoveryPhrase: PHRASE });
     }
-  }, 60_000);
+  }, 120_000);
 
   it('a cadeia libera a chave com a credencial certa', async () => {
     const container = await makeContainer();
@@ -94,6 +94,21 @@ describe('runUnlockChain (Chain of Responsibility)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('durante a espera o Argon2id nem roda (retorno em milissegundos)', async () => {
+    // ANÁLISE.md, vetor 9: a recusa durante a trava precisa ser barata
+    const container = await makeContainer();
+    resetAttempts();
+    registerFailedAttempt();
+
+    const started = Date.now();
+    const result = await runUnlockChain(context(PIN, 'pin', container));
+    const elapsed = Date.now() - started;
+
+    expect(result?.ok).toBe(false);
+    // um chute de PIN custa ~2 s de Argon2id; a trava devolve sem derivar nada
+    expect(elapsed).toBeLessThan(1000);
   });
 
   it('método ausente no container é credencial errada, com tentativa', async () => {

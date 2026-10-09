@@ -229,7 +229,7 @@ describe('ciclo de vida do cofre (integração)', () => {
     expect(newPin.ok).toBe(true);
     vi.useRealTimers();
     // resetPin faz derive + dois embrulhos Argon2id: sob carga o teto global não basta
-  }, 60_000);
+  }, 120_000);
 
   it('9. detecta arquivo injetado ou removido de fora do app (manifesto)', () => {
     expect(getStatus().locked).toBe(false);

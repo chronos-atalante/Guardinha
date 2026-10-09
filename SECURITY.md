@@ -122,7 +122,8 @@ contrário).
   tenha o arquivo pode zerá-lo e chutar à vontade. A trava serve para conter
   tentativas pela interface do app (e recusa a espera sem nem chegar a rodar o
   Argon2); a defesa real contra atacante com o arquivo e tempo ilimitado é o
-  custo do Argon2id, medido em ~2,1 s por chute de PIN num desktop modesto.
+  custo do Argon2id, medido em ~2,1 s por chute de PIN com a máquina quieta
+  (sob carga do desktop a medição sobe para ~4 a ~16 s, nunca para baixo).
   Nada a mudar no código: trava online mais KDF caro é o modelo correto, e a
   trava não é considerada barreira de segurança contra leitura do disco.
 - **Chave em memória enquanto o cofre está aberto**: com o cofre destravado,

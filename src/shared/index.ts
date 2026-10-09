@@ -1,3 +1,4 @@
+export { formatCountdown } from '@zero/shared/format';
 export {
   evaluateMaster,
   evaluatePassword,

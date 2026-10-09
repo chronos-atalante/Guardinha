@@ -14,7 +14,7 @@ import { setupVaultDirectory } from '@zero/main/privilege';
 import { isKdfUpToDate, keyUnwrapperFor } from '@zero/main/unwrapping';
 import { runUnlockChain } from '@zero/main/unlock';
 import type { UnlockContext } from '@zero/main/unlock';
-import { strengthFor } from '@zero/shared';
+import { formatCountdown, strengthFor } from '@zero/shared';
 import { currentMessages } from '@zero/main/i18n';
 import type { VaultContainerData } from '@zero/main/container';
 import type {
@@ -49,13 +49,6 @@ export function lock(): VaultStatus {
 /** Chave da sessão corrente; lança o erro localizado se o cofre estiver bloqueado. */
 export function requireSessionKey(): Buffer {
   return vaultSession().requireKey();
-}
-
-function formatCountdown(ms: number): string {
-  const total = Math.ceil(ms / 1000);
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
 }
 
 function fail(error: string): VaultResult {

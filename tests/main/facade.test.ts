@@ -27,7 +27,7 @@ function record(id: string): Credential {
 }
 
 describe('VaultStorageFacade (fachada de persistência)', () => {
-  // o Argon2id do PIN custa 256 MB e passa de 10 s sob carga (hookTimeout padrão)
+  // o Argon2id do PIN custa 256 MB e passa de 15 s sob carga (hookTimeout global)
   beforeAll(async () => {
     const result = await createVault({
       masterPassword: MASTER,
@@ -35,7 +35,7 @@ describe('VaultStorageFacade (fachada de persistência)', () => {
       recoveryPhrase: PHRASE,
     });
     expect(result.ok).toBe(true);
-  }, 30_000);
+  }, 120_000);
 
   it('escreve, lê e remove credencial mantendo o manifesto coerente', () => {
     const key = requireSessionKey();

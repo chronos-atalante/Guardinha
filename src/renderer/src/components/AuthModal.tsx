@@ -2,14 +2,9 @@ import { useEffect, useState } from 'react';
 import type { JSX, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { ArrowLeft, Hash, KeyRound, Lock, ShieldCheck, Sparkles } from 'lucide-react';
 import { richText, useMessages } from '@zero/renderer/i18n';
-import {
-  countWords,
-  errorMessage,
-  formatCountdown,
-  normalizePhrase,
-} from '@zero/renderer/formatters';
+import { countWords, errorMessage, normalizePhrase } from '@zero/renderer/formatters';
 import { StrengthMeter } from '@zero/renderer/components/StrengthMeter';
-import { strengthFor } from '@zero/shared';
+import { formatCountdown, strengthFor } from '@zero/shared';
 import type { VaultStatus } from '@zero/types';
 
 interface AuthModalProps {
