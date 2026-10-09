@@ -6,6 +6,52 @@ em português do Brasil.
 
 ## [Não lançado]
 
+## [1.3.1] - 2026-10-08
+
+### Segurança
+
+- **AppArmor em enforce real**: o perfil decorativo do electron-builder foi
+  substituído por `build/apparmor-profile` (gerado no build e instalado pelo
+  `postinst`); o app sobe confinado de verdade e o `SECURITY.md` passou a
+  listar os riscos aceitos (a trava exponencial protege contra o app, não
+  contra o disco; a chave fica em memória enquanto o cofre está aberto).
+- **Clipboard limpo em 30 s**: copiar usuário ou senha agora passa pelo
+  `SecureClipboardProxy` no processo main (`src/main/clipboard.ts`); o
+  renderer não usa mais `navigator.clipboard` e a cópia some da área de
+  transferência 30 s depois, salvo o usuário copiar outra coisa antes.
+- **Auto-lock de 5 minutos**: sem operação no cofre a chave sai da memória
+  sozinha (`ActivityMonitor`, padrão Observer, em `src/main/activity.ts`) e o
+  renderer recebe o evento `vault:auto-locked` (canal novo, `docs/api.md`),
+  além do polling de 15 s que continua como rede de segurança.
+- Vetores do relatório de análise reexecutados e cobertos pela suíte:
+  permissões, adulteração de byte, injeção/remoção de arquivo e trava sem
+  Argon2id na espera (`tests/main/window.test.ts`,
+  `tests/main/facade.test.ts`, `tests/main/vault.test.ts`,
+  `tests/main/unlock.test.ts`); 19 arquivos e 144 testes no total.
+
+### Alterado
+
+- Chave do cofre com um único dono: `VaultSessionManager` (Singleton,
+  `src/main/session.ts`) guarda e zera a chave no lock, no auto-lock e no
+  encerramento do app; nenhum outro módulo mantém cópia.
+- Persistência atrás da fachada `VaultStorageFacade` (`src/main/facade.ts`):
+  `vault.ts` e `entries.ts` pedem operações de alto nível e não tocam mais
+  `fs`, AES-256-GCM nem o manifesto direto.
+- Desbloqueio em cadeia de manipuladores (`src/main/unlock.ts`, Chain of
+  Responsibility): trava exponencial barata corta antes da validação de
+  formato, que corta antes do Argon2id; PIN malformado não paga mais 256 MB
+  de derivação e quem espera a trava não gasta tentativa nova.
+- Embrulho e desembrulho da chave por tipo de credencial
+  (`src/main/unwrapping.ts`, Factory Method) e medidor de força por Strategy
+  (`src/shared/strategy.ts`), no lugar dos `evaluate*` avulsos.
+- Contagem regressiva da trava unificada em `src/shared/format.ts` (estava
+  repetida no main e no renderer).
+- Custo do Argon2id revalidado por benchmark nesta máquina: ~2,1 s por chute
+  de PIN com a máquina quieta e ~4 a ~16 s sob carga do desktop; o processo
+  main fica bloqueado só durante a derivação, e o renderer (processo
+  separado) segue responsivo. Testes de Argon2id real ganharam teto de 120 s
+  para não virar falso positivo sob carga.
+
 ## [1.2.1] - 2026-10-08
 
 ### Adicionado
