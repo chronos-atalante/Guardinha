@@ -24,6 +24,12 @@ export interface UnlockContext {
   derived?: Buffer | undefined;
   /** Chave do cofre liberada quando a cadeia chega ao fim. */
   vaultKey?: Buffer | undefined;
+  /**
+   * A falha da senha mestra cruzou o limite de autodestruição. A cadeia para
+   * aí e devolve `null` (nada a liberar), mas quem chamou precisa saber que o
+   * corte aconteceu para disparar o erase, em vez de seguir para o manifesto.
+   */
+  nuked?: boolean;
 }
 
 /**
@@ -57,15 +63,21 @@ function wrongCredentialError(kind: UnlockInput['kind']): string {
 }
 
 /**
- * Credencial recusada: conta na trava exponencial (como sempre contou) e
- * responde com o mesmo erro de credencial errada, sem ecoar o valor digitado.
+ * Credencial recusada: conta na trava exponencial e responde com o mesmo erro
+ * de credencial errada, sem ecoar o valor digitado. Devolve `null` quando a
+ * falha da senha mestra cruzou o limite de autodestruição, para que a cadeia
+ * não prossiga nem tente abrir nada depois do corte.
  */
-function credentialFailure(context: UnlockContext): VaultResult {
-  const auth = registerFailedAttempt();
+function credentialFailure(context: UnlockContext): VaultResult | null {
+  const { state, crossed } = registerFailedAttempt(context.input.kind, context.container.nukeLimit);
+  if (crossed) {
+    context.nuked = true;
+    return null;
+  }
   return {
     ok: false,
     error: wrongCredentialError(context.input.kind),
-    status: statusFrom(auth, true, true),
+    status: statusFrom(state, true, true),
   };
 }
 

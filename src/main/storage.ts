@@ -1,113 +1,61 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import os from 'node:os';
 import {
-  isLegacyEntryPayload,
   openManifest,
-  packEntryPayload,
   packVaultContainer,
   sealManifest,
-  unpackEntryPayload,
   unpackVaultContainer,
 } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
-import { isValidKdfParams, randomBytes } from '@zero/main/crypto';
+import { isValidKdfParams } from '@zero/main/crypto';
+import {
+  containerFile,
+  entriesDir,
+  legacyVaultDir,
+  vaultDir,
+  xdgVaultDir,
+} from '@zero/main/layout';
+import { isVaultDestroyed } from '@zero/main/erasure-state';
+import {
+  ensureVaultStructure,
+  isPermissionError,
+  isVaultDirUnavailable,
+  migrateHiddenLayout,
+  vaultPath,
+} from '@zero/main/structure';
+import { listEntryIds } from '@zero/main/entries-store';
 import type { VaultContainerData, VaultKdfParams } from '@zero/main/container';
 import type { SaltedPayload } from '@zero/main/crypto';
-import type { Credential } from '@zero/types';
-
-function xdgDir(envVar: string, fallback: string): string {
-  const value = process.env[envVar];
-  if (value !== undefined && value !== '') return value;
-  return path.join(os.homedir(), fallback);
-}
 
 /**
- * Raiz do cofre: `/var/lib/.guardinha/.vault`, pastas ocultas por padrão
- * (fora de `~/`, sobrevive à limpeza da pasta do usuário). `GUARDINHA_VAR_LIB`
- * redireciona a raiz e `GUARDINHA_VAULT_DIR` sobrepõe o caminho completo (testes/dev).
+ * Container do cofre (`vault.zkv`): chaves embrulhadas, trava exponencial e
+ * manifesto cifrado, mais as migrações dos formatos anteriores para `/var/lib`.
+ * Os arquivos das credenciais ficam em `entries-store.ts` e a estrutura de
+ * pastas em `structure.ts`; aqui é só o arquivo do container.
  */
-function vaultDir(): string {
-  const override = process.env.GUARDINHA_VAULT_DIR;
-  if (override !== undefined && override !== '') return override;
-  const varLib = process.env.GUARDINHA_VAR_LIB;
-  const base = varLib !== undefined && varLib !== '' ? varLib : '/var/lib';
-  return path.join(base, '.guardinha', '.vault');
+
+export interface PersistedAuthState {
+  attempts: number;
+  lockUntil: number | null;
+  /** Falhas só da senha mestra (campo da v4); PIN não soma aqui. */
+  attemptsMaster: number;
+  /** Limite estrito da senha mestra; `0` = autodestruição desligada. */
+  nukeLimit: number;
 }
 
-/** Cofre intermediário anterior em `$XDG_DATA_HOME/guardinha/vault`. */
-function xdgVaultDir(): string {
-  return path.join(xdgDir('XDG_DATA_HOME', path.join('.local', 'share')), 'guardinha', 'vault');
-}
-
-function legacyVaultDir(): string {
-  return path.join(os.homedir(), '.guardinha-vault');
-}
-
-function entriesDir(): string {
-  return path.join(vaultDir(), '.entries');
-}
-
-/**
- * Layout oculto: `entries/` (visível) vira `.entries/`. O rename é barato e
- * idempotente; roda antes de qualquer leitura/escrita das credenciais.
- */
-function migrateHiddenLayout(): void {
-  const oldDir = path.join(vaultDir(), 'entries');
-  const newDir = path.join(vaultDir(), '.entries');
-  if (fs.existsSync(oldDir) && !fs.existsSync(newDir)) fs.renameSync(oldDir, newDir);
-}
-
-function containerFile(): string {
-  return path.join(vaultDir(), 'vault.zkv');
-}
+/** Estado neutro: cofre ausente ou ilegível não pode parecer "tentou 0 vezes". */
+const EMPTY_AUTH_STATE: PersistedAuthState = {
+  attempts: 0,
+  lockUntil: null,
+  attemptsMaster: 0,
+  nukeLimit: 0,
+};
 
 function tampered(): Error {
   return new Error(currentMessages().errors.vaultTampered);
 }
 
-function isPermissionError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const code = (error as { code?: unknown }).code;
-  return code === 'EACCES' || code === 'EPERM' || code === 'EROFS';
-}
-
-export interface PersistedAuthState {
-  attempts: number;
-  lockUntil: number | null;
-}
-
-export interface StoredCredential extends Omit<Credential, 'password'> {
-  payload: SaltedPayload;
-}
-
-// ---------- Estrutura e localização ----------
-
-/** Garante a pasta do cofre em `/var/lib` com permissões restritas. */
-export function ensureVaultStructure(): void {
-  try {
-    migrateHiddenLayout();
-    fs.ensureDirSync(vaultDir(), { mode: 0o700 });
-    fs.ensureDirSync(entriesDir(), { mode: 0o700 });
-    fs.chmodSync(vaultDir(), 0o700);
-    fs.chmodSync(entriesDir(), 0o700);
-  } catch (error) {
-    if (isPermissionError(error)) {
-      throw new Error(currentMessages().errors.vaultDirUnavailable, { cause: error });
-    }
-    throw error;
-  }
-}
-
-/** Caminho efetivo do cofre (para mensagens e diagnóstico). */
-export function vaultPath(): string {
-  return vaultDir();
-}
-
-/** true se o erro é falta de permissão para criar a raiz do cofre em /var/lib. */
-export function isVaultDirUnavailable(error: unknown): boolean {
-  return error instanceof Error && error.message === currentMessages().errors.vaultDirUnavailable;
-}
+export { ensureVaultStructure, isVaultDirUnavailable, vaultPath };
 
 // ---------- Migração dos formatos anteriores para /var/lib ----------
 
@@ -142,9 +90,12 @@ function readLegacyAuthState(): PersistedAuthState {
     return {
       attempts: typeof raw.attempts === 'number' ? raw.attempts : 0,
       lockUntil: typeof raw.lockUntil === 'number' ? raw.lockUntil : null,
+      // o JSON legado não conhecia os campos da v4
+      attemptsMaster: 0,
+      nukeLimit: 0,
     };
   } catch {
-    return { attempts: 0, lockUntil: null };
+    return EMPTY_AUTH_STATE;
   }
 }
 
@@ -191,6 +142,10 @@ function parseLegacyEnvelope(raw: unknown): VaultContainerData | null {
     kdf: params,
     attempts: auth.attempts,
     lockUntil: auth.lockUntil,
+    // campos da v4: o JSON legado nunca os teve, então a autodestruição por
+    // contagem nasce desligada num cofre migrado
+    attemptsMaster: 0,
+    nukeLimit: 0,
     methods,
     manifest: null,
   };
@@ -314,6 +269,12 @@ export function readVaultContainer(): VaultContainerData | null {
 }
 
 export function writeVaultContainer(data: VaultContainerData): void {
+  // Depois de um Cryptographic Erase o cofre não volta a existir por conta
+  // própria: um `writeAuthState`, um `initManifest` ou qualquer `VaultContainerData`
+  // ainda em memória parariam aqui, em vez de recriar um `vault.zkv` sem chave
+  // e transformar "cofre destruído" em "cofre adulterado". Só `createVault`
+  // libera de novo, e só porque o usuário pediu um cofre novo.
+  if (isVaultDestroyed()) return;
   ensureVaultStructure();
   const buffer = packVaultContainer(data);
   const tmp = `${containerFile()}.tmp`;
@@ -327,11 +288,16 @@ export function writeVaultContainer(data: VaultContainerData): void {
 export function readAuthState(): PersistedAuthState {
   try {
     const data = readVaultContainer();
-    if (data === null) return { attempts: 0, lockUntil: null };
-    return { attempts: data.attempts, lockUntil: data.lockUntil };
+    if (data === null) return EMPTY_AUTH_STATE;
+    return {
+      attempts: data.attempts,
+      lockUntil: data.lockUntil,
+      attemptsMaster: data.attemptsMaster,
+      nukeLimit: data.nukeLimit,
+    };
   } catch {
     // getStatus nunca lança; a adulteração aparece nas operações de dados
-    return { attempts: 0, lockUntil: null };
+    return EMPTY_AUTH_STATE;
   }
 }
 
@@ -340,6 +306,8 @@ export function writeAuthState(state: PersistedAuthState): void {
   if (data === null) return;
   data.attempts = state.attempts;
   data.lockUntil = state.lockUntil;
+  data.attemptsMaster = state.attemptsMaster;
+  data.nukeLimit = state.nukeLimit;
   writeVaultContainer(data);
 }
 
@@ -381,86 +349,5 @@ export function verifyManifest(vaultKey: Buffer): void {
   const actual = new Set(listEntryIds());
   if (expected.length !== actual.size || expected.some((id) => !actual.has(id))) {
     throw tampered();
-  }
-}
-
-// ---------- Entradas individuais (arquivos .zke cifrados) ----------
-
-/**
- * Segunda camada contra path traversal (classe do CVE-2026-21589): o caminho
- * do arquivo só é montado a partir de id sem separador nem byte nulo, então
- * nenhum chamador consegue escapar de `.entries/` com `../`.
- */
-function assertSafeEntryId(id: string): void {
-  if (id === '' || id.includes('/') || id.includes('\\') || id.includes('\0')) {
-    throw new Error(currentMessages().errors.invalidId);
-  }
-}
-
-export function createVaultKey(): Buffer {
-  return randomBytes(32);
-}
-
-export function listEntryIds(): string[] {
-  ensureVaultStructure();
-  const ids = new Set<string>();
-  for (const file of fs.readdirSync(entriesDir())) {
-    if (file.endsWith('.zke')) ids.add(file.slice(0, -4));
-    else if (file.endsWith('.enc')) ids.add(file.slice(0, -4));
-  }
-  return [...ids];
-}
-
-function entryFile(id: string): string {
-  const current = path.join(entriesDir(), `${id}.zke`);
-  if (fs.existsSync(current)) return current;
-  return path.join(entriesDir(), `${id}.enc`);
-}
-
-export function readEntryPayload(id: string): SaltedPayload {
-  assertSafeEntryId(id);
-  migrateHiddenLayout();
-  const file = entryFile(id);
-  if (!fs.existsSync(file)) throw new Error(currentMessages().errors.entryNotFound);
-  const raw = fs.readFileSync(file);
-
-  if (isLegacyEntryPayload(raw)) {
-    let legacy: unknown;
-    try {
-      legacy = JSON.parse(raw.toString('utf8'));
-    } catch {
-      throw tampered();
-    }
-    if (typeof legacy !== 'object' || legacy === null) throw tampered();
-    const payload = asPayload(legacy);
-    if (payload === null) throw tampered();
-    writeEntryPayload(id, payload);
-    fs.removeSync(file);
-    return payload;
-  }
-
-  const payload = unpackEntryPayload(raw);
-  if (payload === null) throw tampered();
-  return payload;
-}
-
-export function writeEntryPayload(id: string, payload: SaltedPayload): void {
-  assertSafeEntryId(id);
-  ensureVaultStructure();
-  const buffer = packEntryPayload(payload);
-  const file = path.join(entriesDir(), `${id}.zke`);
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, buffer, { mode: 0o600 });
-  fs.renameSync(tmp, file);
-  const legacy = path.join(entriesDir(), `${id}.enc`);
-  if (fs.existsSync(legacy)) fs.removeSync(legacy);
-}
-
-export function deleteEntry(id: string): void {
-  assertSafeEntryId(id);
-  migrateHiddenLayout();
-  for (const extension of ['zke', 'enc']) {
-    const file = path.join(entriesDir(), `${id}.${extension}`);
-    if (fs.existsSync(file)) fs.removeSync(file);
   }
 }

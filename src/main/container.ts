@@ -16,30 +16,47 @@ import type { Argon2Params, SaltedPayload } from '@zero/main/crypto';
 const VAULT_MAGIC = Buffer.from('ZKVAULT1', 'ascii');
 const ENTRY_MAGIC = Buffer.from('ZENTRY01', 'ascii');
 
-/** Versão atual: parâmetros Argon2id individuais por método de desbloqueio. */
-export const VAULT_VERSION = 3;
-/** Versão anterior, ainda legível: um único KDF global no cabeçalho. */
-const LEGACY_VAULT_VERSION = 2;
+/** Versão atual: contador de tentativas da senha mestra e limite de autodestruição. */
+export const VAULT_VERSION = 4;
+/** Versão anterior, ainda legível: KDF por método, sem os campos de pânico. */
+const LEGACY_VAULT_VERSION = 3;
+/** Versão mais antiga ainda legível: um único KDF global no cabeçalho. */
+const ANCIENT_VAULT_VERSION = 2;
 
 /**
  * `magic(8) + version(4) + createdAt(8) + memoryKiB(4) + iterations(4) +
- * parallelism(4) + attempts(4) + lockUntil(8) + flags(1)`.
- * Em v3 o tripo de KDF do cabeçalho é informativo (cada método tem o seu).
+ * parallelism(4) + attempts(4) + lockUntil(8) + flags(1)` = 45 bytes até a v3.
+ * A v4 acrescenta `attemptsMaster(4) + nukeLimit(4)` logo depois das flags,
+ * chegando a 53. O tamanho do cabeçalho é função da versão, então a leitura de
+ * um arquivo antigo não pode usar uma constante só.
+ *
+ * Em v3 e v4 o tripo de KDF do cabeçalho é informativo (cada método tem o seu).
  */
-const VAULT_HEADER_BYTES = 45;
-/** `memoryKiB(4) + iterations(4) + parallelism(4)` antes do salt de cada método (v3). */
+const HEADER_BYTES_BASE = 45;
+const HEADER_BYTES_V4 = 53;
 const METHOD_KDF_BYTES = 12;
 /** `salt(16) + iv(16) + tag(16) + ctLen(4)` antes do texto cifrado. */
 const BLOB_HEAD_BYTES = 52;
 const ENTRY_HEADER_BYTES = 8 + BLOB_HEAD_BYTES;
 
+/** Deslocamento dos campos que só existem a partir da v4. */
+const OFFSET_ATTEMPTS_MASTER = 45;
+const OFFSET_NUKE_LIMIT = 49;
+
 const FLAG_MASTER = 0x01;
 const FLAG_PIN = 0x02;
 const FLAG_RECOVERY = 0x04;
 const FLAG_MANIFEST = 0x08;
-const FLAGS_ALL = FLAG_MASTER | FLAG_PIN | FLAG_RECOVERY | FLAG_MANIFEST;
+/** Embrulho de uma chave *decoy*, controlado pelo PIN de coação. */
+export const FLAG_PANIC = 0x10;
+const FLAGS_ALL = FLAG_MASTER | FLAG_PIN | FLAG_RECOVERY | FLAG_MANIFEST | FLAG_PANIC;
 
 const MANIFEST_VERSION = 1;
+
+/** Cabeçalho em bytes conforme a versão gravada. */
+function headerSize(version: number): number {
+  return version >= VAULT_VERSION ? HEADER_BYTES_V4 : HEADER_BYTES_BASE;
+}
 
 export interface VaultKdfParams extends Argon2Params {
   algo: 'argon2id';
@@ -60,8 +77,22 @@ export interface VaultContainerData {
   kdf: VaultKdfParams;
   attempts: number;
   lockUntil: number | null;
+  /** Falhas só da senha mestra; o PIN não soma aqui (campo da v4). */
+  attemptsMaster: number;
+  /**
+   * Falhas consecutivas da senha mestra que disparam o Cryptographic Erase
+   * (campo da v4). `0` é desligado, e é o padrão: autodestruição por contagem
+   * é decisão do usuário, nunca surpresa. Ver `SECURITY.md`.
+   */
+  nukeLimit: number;
   /** Chave do cofre embrulhada por cada credencial (blobs cifrados). */
-  methods: { master?: WrappedMethod; pin?: WrappedMethod; recovery?: WrappedMethod };
+  methods: {
+    master?: WrappedMethod;
+    pin?: WrappedMethod;
+    recovery?: WrappedMethod;
+    /** PIN de coação: embrulha uma chave decoy, sem relação com a chave real. */
+    panic?: WrappedMethod;
+  };
   /** Lista de ids cifrada com a chave do cofre; `null` = ainda não sellada. */
   manifest: SaltedPayload | null;
 }
@@ -148,9 +179,10 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
     [FLAG_MASTER, data.methods.master],
     [FLAG_PIN, data.methods.pin],
     [FLAG_RECOVERY, data.methods.recovery],
+    [FLAG_PANIC, data.methods.panic],
   ];
   let flags = 0;
-  let size = VAULT_HEADER_BYTES;
+  let size = HEADER_BYTES_V4;
   for (const [flag, method] of methods) {
     if (method !== undefined) {
       assertKdf(method.kdf);
@@ -167,15 +199,17 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
   VAULT_MAGIC.copy(buffer, 0);
   buffer.writeUInt32BE(VAULT_VERSION, 8);
   buffer.writeBigUInt64BE(BigInt(data.createdAt), 12);
-  // tripo global de KDF: informativo em v3 (cada método tem o seu)
+  // tripo global de KDF: informativo em v3+ (cada método tem o seu)
   buffer.writeUInt32BE(data.kdf.memoryKiB, 20);
   buffer.writeUInt32BE(data.kdf.iterations, 24);
   buffer.writeUInt32BE(data.kdf.parallelism, 28);
   buffer.writeUInt32BE(data.attempts, 32);
   buffer.writeBigInt64BE(BigInt(data.lockUntil ?? 0), 36);
   buffer.writeUInt8(flags, 44);
+  buffer.writeUInt32BE(data.attemptsMaster, OFFSET_ATTEMPTS_MASTER);
+  buffer.writeUInt32BE(data.nukeLimit, OFFSET_NUKE_LIMIT);
 
-  let cursor = VAULT_HEADER_BYTES;
+  let cursor = HEADER_BYTES_V4;
   for (const [flag, method] of methods) {
     if (method !== undefined && (flags & flag) !== 0) {
       cursor = writeMethodBlob(buffer, cursor, method);
@@ -187,28 +221,41 @@ export function packVaultContainer(data: VaultContainerData): Buffer {
 }
 
 export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null {
-  if (buffer.length < VAULT_HEADER_BYTES) return null;
+  if (buffer.length < HEADER_BYTES_BASE) return null;
   if (!buffer.subarray(0, 8).equals(VAULT_MAGIC)) return null;
   const version = buffer.readUInt32BE(8);
-  if (version !== VAULT_VERSION && version !== LEGACY_VAULT_VERSION) return null;
+  if (
+    version !== VAULT_VERSION &&
+    version !== LEGACY_VAULT_VERSION &&
+    version !== ANCIENT_VAULT_VERSION
+  ) {
+    return null;
+  }
+  const header = headerSize(version);
+  if (buffer.length < header) return null;
   const flags = buffer.readUInt8(44);
+  // flag desconhecida = arquivo adulterado (ou de versão futura): fail-closed
   if ((flags & ~FLAGS_ALL) !== 0) return null;
 
   // o tripo do cabeçalho tem o mesmo formato do KDF de cada método
   const headerKdf = readKdfAt(buffer, 20);
   if (headerKdf === null) return null;
 
-  let cursor = VAULT_HEADER_BYTES;
+  // os campos da v4 só existem quando o cabeçalho foi gravado com 53 bytes
+  const hasPanicFields = version >= VAULT_VERSION;
+
+  let cursor = header;
   const methods: VaultContainerData['methods'] = {};
-  const entries: [number, 'master' | 'pin' | 'recovery'][] = [
+  const entries: [number, 'master' | 'pin' | 'recovery' | 'panic'][] = [
     [FLAG_MASTER, 'master'],
     [FLAG_PIN, 'pin'],
     [FLAG_RECOVERY, 'recovery'],
+    [FLAG_PANIC, 'panic'],
   ];
   for (const [flag, name] of entries) {
     if ((flags & flag) === 0) continue;
     let kdf = headerKdf;
-    if (version === VAULT_VERSION) {
+    if (version >= LEGACY_VAULT_VERSION) {
       const perMethod = readKdfAt(buffer, cursor);
       if (perMethod === null) return null;
       kdf = perMethod;
@@ -237,6 +284,8 @@ export function unpackVaultContainer(buffer: Buffer): VaultContainerData | null 
     kdf: headerKdf,
     attempts: buffer.readUInt32BE(32),
     lockUntil: lockUntilRaw === 0n ? null : Number(lockUntilRaw),
+    attemptsMaster: hasPanicFields ? buffer.readUInt32BE(OFFSET_ATTEMPTS_MASTER) : 0,
+    nukeLimit: hasPanicFields ? buffer.readUInt32BE(OFFSET_NUKE_LIMIT) : 0,
     methods,
     manifest,
   };

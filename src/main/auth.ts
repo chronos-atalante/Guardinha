@@ -35,20 +35,39 @@ export function getLockRemainingMs(state: PersistedAuthState): number {
   return Math.max(0, state.lockUntil - Date.now());
 }
 
-/** Registra tentativa fallhada e aplica trava exponencial. */
-export function registerFailedAttempt(): PersistedAuthState {
-  const state = readAuthState();
-  const attempts = state.attempts + 1;
-  const next: PersistedAuthState = {
+/**
+ * Registra tentativa fallhada e aplica trava exponencial.
+ *
+ * `kind` separa o que é erro de digitação do que é ataque: só a falha da
+ * **senha mestra** soma em `attemptsMaster`, que é o contador do limite de
+ * autodestruição. Falha de PIN não soma lá, porque o PIN é o método do dia a
+ * dia e o valor padrão do limite fica bem acima de erro de digitação.
+ *
+ * Devolve o estado novo junto do limite estrito, para quem chama decidir se
+ * crossed e precisa destruir. O retorno existe porque o corte da autodestruição
+ * mora em `vault.ts` (único lugar que pode apagar o cofre), e não aqui.
+ */
+export function registerFailedAttempt(
+  kind: 'master' | 'pin',
+  nukeLimit = 0,
+): { state: PersistedAuthState; crossed: boolean } {
+  const current = readAuthState();
+  const attempts = current.attempts + 1;
+  const attemptsMaster = kind === 'master' ? current.attemptsMaster + 1 : current.attemptsMaster;
+  const state: PersistedAuthState = {
     attempts,
     lockUntil: calculateLockout(attempts),
+    attemptsMaster,
+    nukeLimit,
   };
-  writeAuthState(next);
-  return next;
+  writeAuthState(state);
+  return { state, crossed: nukeLimit > 0 && attemptsMaster >= nukeLimit };
 }
 
 export function resetAttempts(): void {
-  writeAuthState({ attempts: 0, lockUntil: null });
+  const current = readAuthState();
+  // `nukeLimit` sobrevive ao reset: é configuração do cofre, não estado de trava
+  writeAuthState({ attempts: 0, lockUntil: null, attemptsMaster: 0, nukeLimit: current.nukeLimit });
 }
 
 export function validateMasterPasswordFormat(password: string): boolean {

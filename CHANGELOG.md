@@ -6,6 +6,93 @@ em português do Brasil.
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Cryptographic Erase**: botão de autodestruição na barra lateral que
+  sobrescreve e apaga o cofre inteiro. Apagar o `vault.zkv` é o que destrói o
+  cofre, porque ele é o único lugar onde existe a chave embrulhada; sem a
+  chave, cada `.zke` vira ruído matemático. A chave da RAM é zerada **antes**
+  de qualquer I/O (`panicDestroy`, em `src/main/vault.ts`).
+- **PIN de coação** (`src/main/vault.ts`): um segundo PIN que abre um cofre
+  vazio enquanto aciona a mesma autodestruição, para uso sob coação física. É
+  verificado antes da trava exponencial (quem está sob coação não espera 24 h),
+  não conta tentativa (para não denunciar a existência do segundo caminho) e
+  paga o mesmo Argon2id de um PIN comum (para não ser medido pelo atacante). A
+  sessão de coação não guarda chave alguma. Configurável em Configurações.
+- **Autodestruição por tentativas da senha mestra**: limite configurável que
+  dispara o Cryptographic Erase ao ser cruzado. **Desligada por padrão**, com
+  piso 50, porque apagar o cofre por contagem é irreversível e a frase de
+  recuperação não salva nessa situação. Falha de PIN e de frase não contam
+  para esse limite.
+- **Sobrescrita antes do `unlink`** (`src/main/shred.ts`): todo arquivo
+  apagado pelo app passa por sobrescrita em blocos de 64 KiB alternando bytes
+  aleatórios e zeros, com `fsync` antes de fechar e `fsync` do diretório pai.
+  O arquivo é aberto com `O_NOFOLLOW`, então symlink não é seguido.
+- **Varredura de temporários órfãos**: um `.tmp` deixado por um crash não é
+  coberto pelo manifesto; agora eles são sobrescritos e apagados na
+  inicialização, antes do primeiro `vault:status` responder.
+
+### Alterado
+
+- **Container do cofre na versão 4**: cabeçalho de 45 para 53 bytes, com
+  `attemptsMaster` e `nukeLimit` logo depois da máscara de flags, e a flag do
+  método de pânico. Cofres nas versões 2 e 3 continuam legíveis (com os campos
+  novos valendo zero) e sobem de versão no próximo desbloqueio; o tamanho do
+  cabeçalho passou a ser função da versão, e não uma constante só.
+- **Persistência reorganizada por domínio**: `layout.ts` (caminhos, sem `fs`),
+  `structure.ts` (pastas e permissões), `entries-store.ts` (os arquivos
+  `.zke`/`.enc`) e `erase.ts` (a orquestração da destruição). O `storage.ts`
+  ficou só com o `vault.zkv` e as migrações, dentro do teto de linhas do
+  repositório.
+- **Configurações** deixa de ser uma tela de aviso e passa a ter as duas
+  proteções de pânico, atrás do cofre desbloqueado.
+- Suíte de testes com 23 arquivos e 213 testes (antes 19 e 144).
+
+### Corrigido
+
+- **Tela travada quando a sessão do cofre some no meio de uma operação**: a
+  chave pode ser zerada entre o status que o renderer recebeu e a chamada de
+  dados seguinte, seja pelo auto-lock disparando com a tela montada, seja pelo
+  restart do processo main em `npm run dev` (que recria o `VaultSessionManager`
+  vazio e deixa o renderer com a tela antiga). O renderer ficava chamando
+  `entries:list` contra um cofre que não existia mais, com um erro no console
+  que ninguém entendia. Agora as operações que exigem a chave avisam o renderer
+  pelo mesmo canal do auto-lock, e ele volta para a autenticação. A resposta
+  continua sendo erro de propósito: devolver lista vazia faria o app parecer um
+  cofre vazio, que é a pior leitura possível num app de credenciais
+  (`withSessionNotice`, em `src/main/index.ts`).
+- **Ruído de VA-API na partida**: o Chromium imprimia
+  `libva error: iHD_drv_video.so init failed` ao subir em máquina com o driver
+  de vídeo do Intel quebrado. Desligada apenas a decodificação acelerada de
+  vídeo (`--disable-accelerated-video-decode`), que o app não usa: ele não tem
+  `<video>`, WebCodecs nem captura de canvas, e a composição de tela continua
+  na GPU. Desligar a GPU inteira resolveria a mensagem também, mas trocaria a
+  aceleração da interface por software em todas as máquinas.
+
+### Segurança
+
+- **O container não ressuscita depois de um erase**: `writeVaultContainer`
+  recusa escrever enquanto o processo marcar o cofre como destruído, para que
+  um `writeAuthState`, um `initManifest` ou um `VaultContainerData` ainda em
+  memória não recriem um `vault.zkv` sem chave e transformem "cofre destruído"
+  em "cofre adulterado". Só `createVault` libera a guarda.
+- **Autenticação**: a senha mestra tem agora contador próprio
+  (`attemptsMaster`), separado do contador geral, para que o limite estrito não
+  seja acionado por erro de digitação de PIN.
+- Novo estado de sessão "decoy", sem chave, para o PIN de pânico: a lista de
+  credenciais vem vazia e nenhum `.zke` pode ser decifrado a partir dele.
+
+### Documentação
+
+- `SECURITY.md`, `docs/cofre.md`, `docs/seguranca.md`, `docs/api.md`,
+  `docs/telas.md`, `docs/testes.md` e `AGENTS.md` descrevem a nova estratégia
+  de destruição, o PIN de pânico e o limite por tentativas, incluindo os
+  riscos aceitos: o PIN de pânico não passa pela trava e não conta tentativa, e
+  a autodestruição por contagem nasce desligada.
+- Justificativa registrada de por que a sobrescrita **não é garantia em SSD** e
+  de por que o Cryptographic Erase é a estratégia primária lá, e de por que o
+  app não roda `fstrim` (o perfil AppArmor nega, e TRIM é do sistema).
+
 ## [1.3.1] - 2026-10-08
 
 ### Segurança

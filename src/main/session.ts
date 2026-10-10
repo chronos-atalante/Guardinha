@@ -14,6 +14,14 @@ export class VaultSessionManager {
 
   private key: Buffer | null = null;
 
+  /**
+   * Sessão decoy: o PIN de coação abriu um cofre que não existe mais. Não há
+   * chave nenhuma em memória (a chave real foi apagada na RAM antes do disco),
+   * mas o app se comporta como se tivesse aberto um cofre vazio, que é
+   * exatamente o que a pessoa sob coação precisa poder mostrar.
+   */
+  private decoy = false;
+
   private constructor() {
     activityMonitor.subscribe(() => {
       this.wipe();
@@ -33,6 +41,20 @@ export class VaultSessionManager {
     this.touch();
   }
 
+  /**
+   * Sessão de coação: o cofre foi destruído e o que aparece é um cofre vazio.
+   * Não guarda chave alguma, então nada aqui pode decifrar um `.zke`.
+   */
+  public adoptDecoy(): void {
+    this.wipe();
+    this.decoy = true;
+  }
+
+  /** true se a sessão é a de coação (cofre vazio, sem chave real). */
+  public isDecoy(): boolean {
+    return this.decoy;
+  }
+
   /** Chave corrente; lança o erro localizado se o cofre estiver bloqueado. */
   public requireKey(): Buffer {
     if (this.key === null) {
@@ -47,7 +69,7 @@ export class VaultSessionManager {
   }
 
   public isUnlocked(): boolean {
-    return this.key !== null;
+    return this.key !== null || this.decoy;
   }
 
   /** Marca atividade e rearma a trava automática. */
@@ -59,13 +81,14 @@ export class VaultSessionManager {
   /**
    * Zera a chave na memória (`fill(0)`) e cancela o auto-lock: o lock manual,
    * o timeout e o encerramento do app passam por aqui, sem sobrar cópia
-   * legível.
+   * legível. A sessão decoy também morre aqui.
    */
   public wipe(): void {
     if (this.key !== null) {
       this.key.fill(0);
       this.key = null;
     }
+    this.decoy = false;
     activityMonitor.stop();
   }
 }

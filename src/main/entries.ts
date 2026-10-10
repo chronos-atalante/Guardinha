@@ -1,6 +1,7 @@
 import { validateDomainFormat, validateUsernameFormat } from '@zero/main/auth';
 import { vaultStorage } from '@zero/main/facade';
 import { requireSessionKey, touch } from '@zero/main/vault';
+import { vaultSession } from '@zero/main/session';
 import { currentMessages } from '@zero/main/i18n';
 import type { Credential, CredentialInput } from '@zero/types';
 
@@ -12,6 +13,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * a lista com o erro único de adulteração (fail-closed, sem ignorar nada).
  */
 export function listEntries(): Credential[] {
+  // sessão decoy (PIN de coação): o cofre foi destruído e o que aparece é
+  // vazio. Sem chave não há o que decifrar, e inventar ids seria mentira
+  if (vaultSession().isDecoy()) return [];
   const key = requireSessionKey();
   vaultStorage.verifyManifest(key);
   const records = vaultStorage.listIds().map((id) => vaultStorage.readRecord(id, key));

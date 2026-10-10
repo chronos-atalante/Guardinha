@@ -49,6 +49,9 @@ export const app = {
   on: vi.fn<(event: string, listener: WindowEventHandler) => void>(),
   whenReady: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   getName: vi.fn<() => string>(() => 'guardinha'),
+  commandLine: {
+    appendSwitch: vi.fn<(name: string, value?: string) => void>(),
+  },
   name: 'Guardinha',
   // Propriedade booleana, como no Electron real (não função).
   isPackaged: false,

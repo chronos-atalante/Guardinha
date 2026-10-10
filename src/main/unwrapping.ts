@@ -9,8 +9,8 @@ import {
 import type { VaultKdfParams, WrappedMethod } from '@zero/main/container';
 import type { UnlockKind } from '@zero/types';
 
-/** Todo método que embrulha a chave, inclusive a frase de recuperação. */
-export type CredentialKind = UnlockKind | 'recovery';
+/** Todo método que embrulha a chave, inclusive a frase e o PIN de coação. */
+export type CredentialKind = UnlockKind | 'recovery' | 'panic';
 
 /**
  * Embrulho/desembrulho da chave do cofre (Strategy por tipo de credencial):
@@ -32,9 +32,16 @@ export interface KeyUnwrapper {
  * Custo do Argon2id para um método de desbloqueio: o PIN de 8 dígitos é o
  * segredo fraco (10^8 candidatas offline) e por isso recebe o perfil mais caro;
  * senha mestra e frase de recuperação têm entropia própria, um nível abaixo.
+ * O PIN de pânico é o mesmo formato do PIN e recebe o mesmo custo, de propósito:
+ * o atacante que mede o tempo de um desbloqueio legítimo não pode perceber que
+ * existe um segundo caminho.
  */
 function kdfFor(kind: CredentialKind): VaultKdfParams {
-  return { algo: 'argon2id', ...kdfProfileFor(kind) };
+  // o PIN de pânico é o mesmo segredo fraco do PIN, com o mesmo custo: um
+  // desbloqueio por ele custa exatamente o mesmo que um legítimo, então quem
+  // mede o tempo de um para o outro não descobre o atalho
+  const base = kind === 'pin' || kind === 'panic' ? kdfProfileFor('pin') : kdfProfileFor('master');
+  return { algo: 'argon2id', ...base };
 }
 
 /** A chave desembrulhada tem 32 bytes; qualquer outra forma é container corrompido. */
@@ -82,6 +89,16 @@ class RecoveryKeyUnwrapper extends Argon2KeyUnwrapper {
 }
 
 /**
+ * PIN de coação: embrulha uma chave **decoy** de 32 bytes aleatórios, sem
+ * nenhuma relação com a chave real. Desembrulhar o método `panic` só prova que
+ * quem digitou conhece o PIN de pânico; não entrega nada do cofre de verdade,
+ * porque a chave que sai daqui nunca descriptografou um único `.zke`.
+ */
+class PanicKeyUnwrapper extends Argon2KeyUnwrapper {
+  public readonly kind = 'panic' as const;
+}
+
+/**
  * Mapa de embrulhadores por tipo de credencial. Os embrulhadores são puros
  * (sem estado), então a fábrica é só este mapa + `keyUnwrapperFor`.
  */
@@ -90,6 +107,7 @@ const UNWRAPPERS: ReadonlyMap<CredentialKind, KeyUnwrapper> = new Map<Credential
     ['master', new MasterKeyUnwrapper()],
     ['pin', new PinKeyUnwrapper()],
     ['recovery', new RecoveryKeyUnwrapper()],
+    ['panic', new PanicKeyUnwrapper()],
   ],
 );
 
@@ -109,4 +127,13 @@ export function keyUnwrapperFor(kind: CredentialKind): KeyUnwrapper {
 /** true se o custo gravado já é o atual (candidato a reembrulho caso contrário). */
 export function isKdfUpToDate(kind: CredentialKind, method: WrappedMethod): boolean {
   return isSameKdf(method.kdf, keyUnwrapperFor(kind).kdf);
+}
+
+/**
+ * Gera a chave decoy do PIN de pânico. São 32 bytes aleatórios, então
+ * qualquer tentativa de abrir um `.zke` com ela falha no GCM, e o app nem
+ * tenta: quem entra por este caminho recebe um cofre vazio.
+ */
+export function decoyKey(): Buffer {
+  return randomBytes(32);
 }

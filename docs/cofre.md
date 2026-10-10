@@ -32,28 +32,37 @@ raiz do projeto por meio de `GUARDINHA_VAULT_DIR`.
 
 Arquivo binário com magic `ZKVAULT1`, escrito e lido apenas em
 `src/main/container.ts`. Toda leitura é fail-closed: forma inválida,
-truncamento, parâmetro fora da faixa ou byte a mais no fim devolvem `null`
-(tratado como adulterado), nunca conteúdo em claro.
+truncamento, parâmetro fora da faixa, flag desconhecida ou byte a mais no fim
+devolvem `null` (tratado como adulterado), nunca conteúdo em claro.
 
-Cabeçalho de 45 bytes (valores em big endian):
+Cabeçalho de **53 bytes** na versão 4 (valores em big endian):
 
-| Offset | Tamanho | Campo                                         |
-| ------ | ------- | --------------------------------------------- |
-| 0      | 8       | Magic `ZKVAULT1`                              |
-| 8      | 4       | Versão (`3` atual; `2` ainda é legível)       |
-| 12     | 8       | `createdAt` (epoch em ms)                     |
-| 20     | 4       | `memoryKiB` do KDF global (informativo em v3) |
-| 24     | 4       | `iterations` do KDF global                    |
-| 28     | 4       | `parallelism` do KDF global                   |
-| 32     | 4       | Tentativas da trava exponencial               |
-| 36     | 8       | `lockUntil` (epoch em ms; `0` = sem trava)    |
-| 44     | 1       | Máscara de flags do que vem a seguir          |
+| Offset | Tamanho | Campo                                          |
+| ------ | ------- | ---------------------------------------------- |
+| 0      | 8       | Magic `ZKVAULT1`                               |
+| 8      | 4       | Versão (`4` atual; `3` e `2` ainda legíveis)   |
+| 12     | 8       | `createdAt` (epoch em ms)                      |
+| 20     | 4       | `memoryKiB` do KDF global (informativo em v3+) |
+| 24     | 4       | `iterations` do KDF global                     |
+| 28     | 4       | `parallelism` do KDF global                    |
+| 32     | 4       | Tentativas da trava exponencial                |
+| 36     | 8       | `lockUntil` (epoch em ms; `0` = sem trava)     |
+| 44     | 1       | Máscara de flags do que vem a seguir           |
+| 45     | 4       | `attemptsMaster` (só senha mestra; v4)         |
+| 49     | 4       | `nukeLimit` (0 = desligado; v4)                |
+
+O cabeçalho tem tamanho **função da versão**: um arquivo v3 tem 45 bytes e os
+dois campos novos simplesmente não existem nele, então a leitura devolve `0`
+para os dois (autodestruição por contagem nasce desligada num cofre antigo) e
+o cursor dos blobs começa em 45 em vez de 53. É por isso que o tamanho não pode
+ser uma constante só no código.
 
 Depois do cabeçalho vêm os blocos indicados pelas flags, nesta ordem: chave
-embrulhada da senha mestra, do PIN, da frase de recuperação e o manifesto.
-Cada bloco traz `salt(16) + iv(16) + tag(16) + tamanho(4) + texto cifrado`;
-em **v3** cada método também traz os próprios 12 bytes de parâmetros
-Argon2id antes do salt.
+embrulhada da senha mestra, do PIN, da frase de recuperação, do **PIN de
+coação** e o manifesto. Cada bloco traz
+`salt(16) + iv(16) + tag(16) + tamanho(4) + texto cifrado`; em **v3 e v4**
+cada método também traz os próprios 12 bytes de parâmetros Argon2id antes do
+salt.
 
 ## Custo do Argon2id por método
 
@@ -73,7 +82,80 @@ memória ou CPU ilimitadas, não como garantia mínima de segurança.
 
 Cofres gravados na versão 2 (KDF único no cabeçalho) continuam legíveis e cada
 método é reembrulhado com o perfil atual **no desbloqueio em que a própria
-credencial dele é usada**. Só quem já tem a credencial consegue fazer isso.
+credencial dele é usada**. Só quem já tem a credencial consegue fazer isso. A
+versão 3 (cabeçalho de 45 bytes, sem os campos de pânico) segue a mesma regra.
+
+## Destruição do cofre
+
+O cofre inteiro morre quando os **blobs de chave embrulhada** morrem, porque
+eles vivem no `vault.zkv`. Depois disso os `.zke` viram ruído matemático
+irrecuperável. É essa a ideia do Cryptographic Erase: não é preciso sobrescrever
+gigabytes, é preciso apagar a chave.
+
+`eraseVault` (`src/main/erase.ts`) apaga, nesta ordem e sem desvios:
+
+1. `vault.zkv` e o `vault.zkv.tmp` (o `.tmp` **contém os mesmos blobs de
+   chave**; um órfão de crash seria uma cópia completa do embrulho);
+2. todo arquivo de `.entries/` (`.zke`, `.zke.tmp`, `.enc`);
+3. a pasta `.entries` em si.
+
+Nunca `vaultDir()` nem `.guardinha/`: a raiz é do sistema (`root:root 0711`,
+criada no `postinst`) e o app não é dona dela. Antes de tudo roda
+`migrateHiddenLayout()`, senão um cofre com o layout antigo fica com `entries/`
+de pé e os nomes dos arquivos aparecem em disco.
+
+Cada arquivo passa por `shredFile` (`src/main/shred.ts`): sobrescrita em blocos
+de 64 KiB alternando bytes aleatórios e zeros, terminada em zeros, com
+`fsync` antes de fechar, `unlink` e `fsync` do diretório pai. O arquivo é
+aberto com `O_NOFOLLOW` e `lstat` recusa symlink e diretório. Falha de shred
+**não** impede a autodestruição: quem apaga o arquivo e o diretório conta o
+que caiu e o que resistiu, e segue.
+
+Depois do erase, `writeVaultContainer` recusa escrever (`erasure-state.ts`):
+sem essa guarda, um `writeAuthState`, um `initManifest` ou um
+`VaultContainerData` ainda em memória recriariam um `vault.zkv` pela metade, sem
+chave, e o usuário veria "cofre adulterado" onde o certo é "cofre destruído".
+Só `createVault` libera a guarda, porque só o usuário cria um cofre novo.
+
+### PIN de coação
+
+O método `panic` do container embrulha uma chave **decoy** de 32 bytes
+aleatórios (`decoyKey`, em `unwrapping.ts`), sem relação com a chave real.
+Desembrulhar esse método só prova que quem digitou conhece o PIN de pânico; a
+chave que sai nunca descriptografou um `.zke`.
+
+Quando o desbloqueio recebe um PIN e o container tem o método `panic`, o app
+tenta desembrulhá-lo **antes** de qualquer outra coisa e **sem respeitar a trava
+exponencial** (quem está sob coação não tem como esperar 24 h). Se der certo:
+a chave da sessão é zerada, o erase roda, e a sessão passa a ser uma sessão
+decoy, sem chave nenhuma, em que a lista é vazia e o cofre aparece como
+existindo. Se der errado, o fluxo segue como se nada tivesse sido tentado e
+**nenhuma tentativa é contada**, para não gerar lockout nem denunciar o
+segundo caminho.
+
+O custo do Argon2id do método `panic` é o mesmo do PIN (256 MiB, t=4, p=4):
+um desbloqueio por ele custa exatamente o mesmo que um legítimo.
+
+### Autodestruição por tentativas
+
+`attemptsMaster` conta só as falhas da **senha mestra**; falha de PIN e falha
+de frase de recuperação não somam nele. Ao cruzar `nukeLimit`, o app chama
+`panicDestroy` e o cofre é destruído. `nukeLimit = 0` significa desligado, que
+é o padrão, e o piso para ligar é 50. Ver a justificativa em `SECURITY.md`.
+
+### SSD e wear leveling
+
+O Cryptographic Erase é a estratégia primária em SSD porque invalida o acesso
+pela chave, não importa para qual bloco físico o controlador moveu a escrita. A
+sobrescrita (`shred`) **não é garantia** em SSD: com wear leveling e
+over-provisioning a escrita pode ir para outro bloco e o original sobrar no
+espaço gerenciado pelo controlador. Sem a chave, o `.zke` é ruído de qualquer
+jeito, e é isso que fecha o caso.
+
+O app **não** roda `fstrim`, `fallocate` nem `sfill`: o perfil AppArmor
+autoriza escrita apenas dentro de `.vault/**` e nega rede, então essas chamadas
+seriam negadas em `enforce`. TRIM é responsabilidade do sistema
+(`fstrim.timer` do systemd no Mint), e o Cryptographic Erase não depende dele.
 
 ## Credencial salva (`<uuid>.zke`)
 
@@ -112,7 +194,8 @@ lugar:
 | `$XDG_DATA_HOME/guardinha/vault`    | `/var/lib/.guardinha/` | Cofre binário intermediário                    |
 | `~/.guardinha-vault/` (JSON legado) | `/var/lib/.guardinha/` | `envelope.json`, `entries/`, `auth-state.json` |
 | `.vault/entries/`                   | `.vault/.entries/`     | Layout oculto (rename barato)                  |
-| Container `vault.zkv` versão 2      | versão 3               | Reembrulho por método no desbloqueio           |
+| Container `vault.zkv` versão 2      | versão 3 ou 4          | Reembrulho por método no desbloqueio           |
+| Container `vault.zkv` versão 3      | versão 4               | Cabeçalho de 45 para 53 bytes                  |
 | `.entries/<uuid>.enc` (JSON)        | `.entries/<uuid>.zke`  | Convertido na primeira leitura                 |
 
 Sem permissão de escrita, a migração falha com o erro de pasta indisponível e

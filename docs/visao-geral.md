@@ -28,6 +28,10 @@ senhas dos sites que quiser. O login do dia a dia é só pelo PIN.
 - Abre o site da credencial no navegador padrão, gera senhas aleatórias e
   mede a força das credenciais enquanto o usuário digita.
 - Fala português do Brasil e inglês, com o idioma escolhido na Sidebar.
+- Destrói o cofre quando o usuário manda: um botão de autodestruição que
+  sobrescreve e apaga tudo, um PIN de coação que abre um cofre vazio enquanto
+  apaga o de verdade, e uma autodestruição opcional por tentativas da senha
+  mestra (desligada por padrão).
 
 ## Dependências de produção
 
@@ -55,6 +59,9 @@ não entra no pacote.
 3. Uso: listar, criar, editar e apagar credenciais, copiar, abrir o site.
 4. Bloqueio: botão de bloqueio, inatividade de 5 minutos ou falha de tentativa
    (trava exponencial de 10 s até 24 h).
+5. Destruição: pelo botão de autodestruição, pelo PIN de coação ou (opcional)
+   por excesso de tentativas da senha mestra. Em todos os casos a chave sai da
+   memória antes de o disco ser tocado.
 
 ## Glossário
 

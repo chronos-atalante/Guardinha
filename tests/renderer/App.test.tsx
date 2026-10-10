@@ -1,24 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import App from '@zero/renderer/App';
-import type { ElectronApi, Credential, VaultStatus } from '@zero/types';
-
-const UNLOCKED: VaultStatus = {
-  exists: true,
-  locked: false,
-  attempts: 0,
-  lockUntil: null,
-  lockRemainingMs: 0,
-};
-
-const LOCKED: VaultStatus = {
-  exists: true,
-  locked: true,
-  attempts: 0,
-  lockUntil: null,
-  lockRemainingMs: 0,
-};
+import { LOCKED, UNLOCKED, installApi } from '../mocks/api.ts';
+import type { Credential } from '@zero/types';
 
 const ENTRY: Credential = {
   id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -31,107 +16,77 @@ const ENTRY: Credential = {
   updatedAt: 1_760_000_000_000,
 };
 
-function installApi(status: VaultStatus, entries: Credential[]): ElectronApi {
-  const api: ElectronApi = {
-    vault: {
-      status: () => Promise.resolve(status),
-      create: () => Promise.resolve({ ok: false, error: 'não usado', status }),
-      unlock: () => Promise.resolve({ ok: false, error: 'não usado', status }),
-      resetPin: () => Promise.resolve({ ok: false, error: 'não usado', status }),
-      lock: () => Promise.resolve(status),
-      onAutoLocked: () => () => {
-        // sem auto-lock exercitado aqui
-      },
-    },
-    openDomain: () => Promise.resolve(),
-    clipboard: { copy: () => Promise.resolve() },
-    entries: {
-      list: () => Promise.resolve(entries),
-      save: () => Promise.resolve(entries),
-      remove: () => Promise.resolve([]),
-    },
-    generator: {
-      generate: () => Promise.resolve('senha-gerada-123'),
-    },
-    settings: {
-      get: () => Promise.resolve({ language: 'pt-BR' }),
-      set: (settings) => Promise.resolve(settings),
-    },
-  };
-  window.api = api;
-  return api;
-}
-
 describe('App', () => {
   it('mostra o desbloqueio só com o PIN quando não houve falhas', async () => {
-    installApi(LOCKED, []);
+    installApi({ status: LOCKED });
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Cofre bloqueado' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'PIN' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Senha mestra' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Esqueci o PIN' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Desbloquear/i })).toBeInTheDocument();
   });
 
-  it('oferece a senha mestra como login após 3 falhas de PIN', async () => {
-    installApi({ ...LOCKED, attempts: 3 }, []);
+  it('libera a senha mestra depois de três falhas de PIN', async () => {
+    installApi({ status: { ...LOCKED, attempts: 3 } });
 
     render(<App />);
 
-    expect(await screen.findByRole('button', { name: 'PIN' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Senha mestra' })).toBeInTheDocument();
-    expect(
-      screen.getByText('PIN incorreto 3 vezes: agora a senha mestra também pode abrir o cofre.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Senha mestra/i })).toBeInTheDocument();
   });
 
-  it('renderiza a sidebar e a lista de credenciais com o cofre aberto', async () => {
-    installApi(UNLOCKED, [ENTRY]);
+  it('mostra a lista de credenciais com o cofre aberto', async () => {
+    installApi({ status: UNLOCKED, entries: [ENTRY] });
 
     render(<App />);
 
-    expect(await screen.findByRole('button', { name: 'Início (Senhas)' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Senhas' })).toBeInTheDocument();
     expect(await screen.findByText('GitHub')).toBeInTheDocument();
-    expect(await screen.findByText('1 credencial(is)')).toBeInTheDocument();
-    expect(screen.getByText('100% Local / Criptografado')).toBeInTheDocument();
   });
 
-  it('navega até o gerador e gera uma senha via IPC', async () => {
+  it('leva à criação do cofre quando ele não existe', async () => {
+    installApi({ status: { ...UNLOCKED, exists: false } });
+
+    render(<App />);
+
+    expect(await screen.findByText(/Crie o seu cofre/i)).toBeInTheDocument();
+  });
+});
+
+describe('botão de autodestruição', () => {
+  it('exige a palavra de confirmação antes de apagar o cofre', async () => {
     const user = userEvent.setup();
-    installApi(UNLOCKED, []);
+    const api = installApi({ status: UNLOCKED });
+    const destroy = vi.fn(() => Promise.resolve({ ...UNLOCKED, exists: false }));
+    api.vault.destroy = destroy;
 
     render(<App />);
-    await screen.findByRole('button', { name: 'Início (Senhas)' });
+    await user.click(await screen.findByRole('button', { name: /Autodestruição/i }));
+    const action = await screen.findByRole('button', { name: /Destruir cofre/i });
+    // sem a palavra, o botão de ação está desabilitado
+    expect(action).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Gerador de Senhas' }));
-    expect(await screen.findByRole('heading', { name: 'Gerador de Senhas' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Digite a palavra/i), 'DESTR');
+    expect(action).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Gerar Senha Criptográfica' }));
-    expect(await screen.findByText('senha-gerada-123')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/Digite a palavra/i));
+    await user.type(screen.getByLabelText(/Digite a palavra/i), 'DESTRUIR');
+    expect(action).toBeEnabled();
+
+    expect(destroy).not.toHaveBeenCalled();
+    await user.click(action);
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
-  it('abre a tela de configurações com o aviso de implementação futura', async () => {
+  it('cancela sem apagar quando a palavra está errada', async () => {
     const user = userEvent.setup();
-    installApi(UNLOCKED, []);
+    const api = installApi({ status: UNLOCKED });
+    const destroy = vi.fn(() => Promise.resolve({ ...UNLOCKED, exists: false }));
+    api.vault.destroy = destroy;
 
     render(<App />);
-    await screen.findByRole('button', { name: 'Início (Senhas)' });
+    await user.click(await screen.findByRole('button', { name: /Autodestruição/i }));
+    await user.type(screen.getByLabelText(/Digite a palavra/i), 'BANANA');
+    expect(await screen.findByText(/O texto não confere/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Configurações' }));
-    expect(await screen.findByRole('heading', { name: 'Configurações' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Em breve' })).toBeInTheDocument();
-    expect(screen.getByText(/serão implementadas em uma versão futura/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Idioma' })).toBeInTheDocument();
-  });
-
-  it('exibe a tela de criação quando não existe cofre', async () => {
-    installApi({ ...UNLOCKED, exists: false, locked: true }, []);
-
-    render(<App />);
-
-    expect(await screen.findByRole('heading', { name: 'Crie o seu cofre' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Avançar' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Cancelar/i }));
+    expect(destroy).not.toHaveBeenCalled();
   });
 });

@@ -16,10 +16,12 @@ Camadas:
   e auto-lock (`activity.ts`, Observer `ActivityMonitor`), desbloqueio
   (`unlock.ts`, cadeia de manipuladores), desembrulho de chaves
   (`unwrapping.ts`, mapa por tipo de credencial), CRUD de credenciais
-  (`entries.ts`), criptografia (`crypto.ts`), persistência (`storage.ts`) sob
-  a fachada (`facade.ts`, `VaultStorageFacade`), clipboard (`clipboard.ts`,
-  `SecureClipboardProxy`), trava exponencial (`auth.ts`), sudo via PolicyKit
-  (`privilege.ts`) e idioma (`settings.ts`, `i18n.ts`).
+  (`entries.ts`), criptografia (`crypto.ts`), persistência (`storage.ts`,
+  `entries-store.ts`, `structure.ts` e `layout.ts`) sob a fachada (`facade.ts`,
+  `VaultStorageFacade`), destruição segura (`shred.ts`, `erase.ts`,
+  `erasure-state.ts`), clipboard (`clipboard.ts`, `SecureClipboardProxy`), trava
+  exponencial (`auth.ts`), sudo via PolicyKit (`privilege.ts`) e idioma
+  (`settings.ts`, `i18n.ts`).
 - `src/messages/`: textos do app em pt-BR (canônico) e en (`@zero/messages`);
   guia em `docs/messages.md`.
 - `src/preload/`: única ponte da UI; monta e expõe `window.api` tipado.
@@ -52,6 +54,14 @@ Camadas:
   `$XDG_CONFIG_HOME/guardinha/settings.json`.
 - IPC via `ipcRenderer.invoke` e `ipcMain.handle`; canal novo só com tipo em
   `src/types/` e entrada em `docs/api.md`.
+- Destruição do cofre: `shred.ts` sobrescreve o arquivo antes do `unlink`
+  (`O_NOFOLLOW`, blocos de 64 KiB alternando aleatório e zero, `fsync` antes de
+  fechar e `fsync` do diretório pai) e `erase.ts` orquestra o Cryptographic
+  Erase apagando o `vault.zkv` (único lugar com a chave embrulhada), o `.tmp`
+  dele, todas as entradas e a pasta `.entries`. `erasure-state.ts` guarda o
+  estado de destruição: depois de um erase, `writeVaultContainer` recusa
+  escrever, para que nenhum read-modify-write recrie o container pela metade.
+  `panicDestroy` (`vault.ts`) zera a chave da RAM **antes** de tocar no disco.
 - A chave do cofre vive em memória no main, dentro do Singleton
   `VaultSessionManager` (`session.ts`); ele zera o Buffer no lock, no auto-lock
   de 5 minutos e no encerramento do app. O temporizador de ociosidade mora no
@@ -94,6 +104,11 @@ Camadas:
   espelhado em `electron.vite.config.mts`, `vitest.config.mts` e
   `src/node.loader.ts`; mudar um alias vale nos quatro.
 - Arquivos no teto de ~500 linhas; passou disso, extraia módulos.
+- `fs` no main fica nos módulos de persistência: `storage.ts` (o `vault.zkv`),
+  `entries-store.ts` (os `.zke`/`.enc`), `structure.ts` (as pastas) e
+  `shred.ts`. A exceção declarada é o `shred.ts`, que é primitiva de baixo
+  nível: recebe sempre um caminho já validado por quem o compôs e não conhece o
+  cofre. `layout.ts` não toca `fs`, só resolve caminhos.
 - Type safety: `strict`, `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noImplicitReturns` e `verbatimModuleSyntax`
   (import de tipo sempre `import type`). Sem `any`, sem cast gratuito.
@@ -142,13 +157,19 @@ Camadas:
   `registerAppProtocol` (substitui `file://`); todo handler IPC valida
   `event.senderFrame` com `assertAppFrame`. Fuses de segurança no electron-
   builder via chave `electronFuses`.
-- Argon2id com custo por método de desbloqueio (PIN de 8 dígitos: 256 MB /
-  t=4 / p=4; senha mestra e frase de recuperação: 128 MB / t=3 / p=4) e
-  AES-256-GCM por arquivo: mudar parâmetros exige migrar o `vault.zkv` (hoje
-  versão `3`, com o KDF de cada método dentro do container; a versão `2` ainda é
-  lida e cada método é reembrulhado com o custo atual no próprio desbloqueio,
-  e isso só é possível para quem tem a credencial) e converter entradas
-  legadas.
+- Argon2id com custo por método de desbloqueio (PIN de 8 dígitos e PIN de
+  pânico: 256 MB / t=4 / p=4; senha mestra e frase de recuperação: 128 MB /
+  t=3 / p=4) e AES-256-GCM por arquivo: mudar parâmetros exige migrar o
+  `vault.zkv` (hoje versão `4`, com o KDF de cada método dentro do container; as
+  versões `2` e `3` ainda são lidas e cada método é reembrulhado com o custo
+  atual no próprio desbloqueio, e isso só é possível para quem tem a credencial)
+  e converter entradas legadas.
+- PIN de pânico: abre um cofre vazio enquanto aciona o Cryptographic Erase. É
+  verificado **antes** da trava exponencial (quem está sob coação não espera
+  24 h), não conta tentativa (para não denunciar o segundo caminho) e paga o
+  mesmo Argon2id de um PIN comum (para não ser medido). A sessão decoy não
+  guarda chave alguma. Autodestruição por tentativas (`nukeLimit`) só conta
+  senha mestra, nasce **desligada** e tem piso 50.
 - `.deb` e `out/` nunca entram no git.
 
 ## Documentação

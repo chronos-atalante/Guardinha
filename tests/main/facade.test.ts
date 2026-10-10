@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { encryptRecord } from '@zero/main/crypto';
 import { vaultStorage } from '@zero/main/facade';
 import { currentMessages } from '@zero/main/i18n';
-import { deleteEntry, updateManifest, writeEntryPayload } from '@zero/main/storage';
+import { deleteEntry, writeEntryPayload } from '@zero/main/entries-store';
+import { updateManifest } from '@zero/main/storage';
 import { createVault, requireSessionKey } from '@zero/main/vault';
 import type { Credential } from '@zero/types';
 

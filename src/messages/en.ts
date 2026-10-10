@@ -181,11 +181,58 @@ export const en: Messages = {
     emptyText:
       'Guardinha settings will be implemented in a future release. ' +
       'In the meantime, language and vault lock stay in the sidebar.',
+    panicTitle: 'Panic PIN',
+    panicSubtitle:
+      'A second PIN that **opens an empty vault** and wipes the real one. ' +
+      'Use it when someone is watching. It does not count as an attempt and works even under lockout.',
+    panicLabel: 'Panic PIN (8 digits)',
+    panicConfirmLabel: 'Repeat the panic PIN',
+    panicMismatch: 'The PINs do not match.',
+    panicSet: 'Set panic PIN',
+    panicClear: 'Remove panic PIN',
+    panicActive: 'Panic PIN active. Keep it somewhere safe: it wipes the vault.',
+    panicInactive: 'No panic PIN set.',
+    nukeTitle: 'Self-destruct on attempts',
+    nukeSubtitle:
+      'Wipes the vault after **N** consecutive master password failures. ' +
+      'The recovery phrase will not help: the file wrapping it is wiped too.',
+    nukeLabel: 'Master password attempt limit',
+    nukeOff: 'Disabled',
+    nukeValue: (n: number): string => `${n} attempts`,
+    nukeEnable: 'Enable self-destruct',
+    nukeDisable: 'Disable self-destruct',
+    nukeConfirmTitle: 'Confirm self-destruct',
+    nukeConfirmText: (n: number): string =>
+      `On reaching ${n} consecutive master password failures, the vault is wiped for good. ` +
+      'There is no undo. Type the limit to confirm:',
+    nukeConfirmLabel: 'Type the limit to confirm',
+  },
+
+  /** Self-destroy dialog, under coercion and from the panic button. */
+  panic: {
+    title: 'Destroy the vault now',
+    subtitle:
+      'This wipes the **entire vault**, with no way back. The key leaves memory and ' +
+      'the encrypted files are overwritten before they disappear.',
+    manualTitle: 'Self-destruct',
+    manualSubtitle:
+      'Use this if you believe someone is about to take the computer. The app goes back ' +
+      'to asking for a new vault, as if this one had never existed.',
+    confirmNameLabel: 'Type the word below to confirm:',
+    confirmWord: 'DESTROY',
+    confirmMismatch: 'The text does not match.',
+    action: 'Destroy vault',
+    working: 'Destroying…',
+    destroyed: 'Vault destroyed.',
   },
 
   errors: {
     vaultExists: 'The vault already exists.',
     vaultMissing: 'Vault not found in /var/lib/.guardinha/.vault/.',
+    vaultDestroyed: 'The vault was destroyed and can no longer be opened.',
+    panicPinSame: 'The panic PIN cannot be the same as the PIN that opens the vault.',
+    invalidNukeLimit: 'Invalid attempt limit.',
+    nukeLimitTooLow: 'The limit is too low to tell apart from a typo.',
     vaultLocked: 'Vault locked: unlock it before accessing credentials.',
     vaultTampered: 'The vault is incomplete or was altered outside the app.',
     vaultDirUnavailable:

@@ -4,6 +4,8 @@
 
 | Versão | Suporte             |
 | ------ | ------------------- |
+| 1.4.x  | ✅ Correções ativas |
+| 1.3.x  | ✅ Correções ativas |
 | 1.1.x  | ✅ Correções ativas |
 
 Versões anteriores ao 1.0.0 não recebem correções; atualize pelo `.deb` mais
@@ -24,6 +26,26 @@ contrário).
 
 ## Proteções já existentes
 
+- **Cryptographic Erase (autodestruição do cofre)**: apagar o `vault.zkv` é o
+  que destrói o cofre, porque ele é o único lugar onde existe a chave do cofre
+  embrulhada. Sem a chave, cada `.zke` vira ruído matemático e o AES-256-GCM
+  não tem caminho de volta. O botão de autodestruição na barra lateral, o PIN de
+  coação e o limite de tentativas da senha mestra chamam o mesmo caminho
+  (`panicDestroy`, em `src/main/vault.ts`), que **zera a chave da RAM antes de
+  tocar no disco**: se o disco falhar, a memória já está limpa.
+- **Sobrescrita antes do `unlink`**: todo arquivo apagado pelo app (container,
+  `.zke`, `.enc` e temporários) passa por `shredFile` (`src/main/shred.ts`),
+  que sobrescreve em blocos de 64 KiB alternando bytes aleatórios e zeros,
+  termina com a passada de zeros, faz `fsync` antes de fechar (sem isso a
+  sobrescrita pode ficar só no cache de página), apaga o nome e sincroniza o
+  diretório pai. O arquivo é aberto com `O_NOFOLLOW` e `lstat` recusa symlink e
+  diretório, então a sobrescrita nunca é dirigida ao lugar errado.
+- **PIN de coação**: um segundo PIN que abre um **cofre vazio** enquanto aciona
+  o Cryptographic Erase (`src/main/vault.ts`). Ele embrulha uma chave _decoy_ de
+  32 bytes aleatórios, sem relação com a chave real, então nada do que sobrou
+  na tela pode ser decifrado. O desbloqueio por ele devolve `ok: true` com lista
+  vazia, e não um erro, porque um erro denunciaria o mecanismo a quem está sob
+  coação.
 - **Login em camadas**: só PIN; a senha mestra só é oferecida após 3 falhas de
   PIN; a frase de recuperação (≥ 12 palavras, escrita pelo próprio usuário)
   serve só para redefinir o PIN; nunca loga. Tentativas erradas disparam
@@ -47,10 +69,12 @@ contrário).
   senha, PIN ou frase, e o desbloqueio é uma cadeia (`src/main/unlock.ts`) em
   que a trava exponencial corta antes da derivação Argon2id.
 - **AES-256-GCM por registro**: salt e IV de 128 bits gerados por hardware,
-  chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 3) guarda cada chave
-  embrulhada com o custo do Argon2id daquele método, a trava exponencial e o
-  manifesto cifrado. Cofres na versão 2 continuam legíveis e cada método é
-  reembrulhado com o custo atual no desbloqueio em que a credencial dele é usada.
+  chave por arquivo via HKDF-SHA512; `vault.zkv` (versão 4) guarda cada chave
+  embrulhada com o custo do Argon2id daquele método, a trava exponencial, o
+  contador de tentativas da senha mestra, o limite de autodestruição e o
+  manifesto cifrado. Cofres nas versões 2 e 3 continuam legíveis: a v3 tem o
+  KDF por método e a v2 um KDF global, e cada método é reembrulhado com o custo
+  atual no desbloqueio em que a credencial dele é usada.
 - **Integridade fail-closed**: o manifesto cifrado lista os registros; arquivo
   removido ou injetado de fora do app vira um único erro de adulteração, sem
   detalhes: nada é carregado.
@@ -150,6 +174,71 @@ contrário).
   corrigida publicada são documentados com data de revisão em
   `.osv-scanner.toml` e voltam a aparecer no `security:audit` quando a data
   passa, monitorados a cada `npm run check`.
+- **Sem TRIM sob demanda**: o app não chama `fstrim`, `fallocate` nem `sfill`.
+  Não é limitação, é decisão: o perfil AppArmor (`build/apparmor-profile`)
+  autoriza escrita apenas dentro de `.vault/**` e nega rede, então qualquer
+  dessas chamadas seria negada em `enforce`. TRIM é do sistema
+  (`fstrim.timer` do systemd, ativo por padrão no Linux Mint), e o
+  Cryptographic Erase não depende dele: apagar a chave funciona com ou sem
+  TRIM. Se algum dia valer a pena, o caminho seria um helper com PolicyKit
+  como o `guardinha-setup` (`src/main/privilege.ts`), com ação `.policy` própria,
+  e o custo/benefício precisaria ser medido antes.
+- **O PIN de pânico não passa pela trava exponencial**: é uma escolha
+  consciente, feita na direção de quem está sob coação. Um PIN de pânico que
+  só funcionasse fora da janela de trava seria inútil na hora em que seria
+  preciso. O efeito colateral aceito: o PIN de pânico é um caminho de
+  desbloqueio que **não conta tentativa**, então ele nunca gera lockout e nunca
+  denuncia a existência de si mesmo por aumento de contador. Ele só paga o
+  Argon2id de um PIN comum (256 MiB, t=4, p=4), o mesmo custo de um
+  desbloqueio legítimo, para que medir o tempo de um e de outro não revele o
+  atalho.
+- **A autodestruição por tentativas é desligada por padrão**: `nukeLimit` vale 0
+  num cofre novo, e o piso de habilitação é 50 (não 5). É decisão de produto
+  registrada, não omissão: apagar o cofre por contagem é uma lâmina sem ponta
+  para o usuário, porque cinco erros de digitação levariam à perda definitiva
+  e **a frase de recuperação não salva**, já que o arquivo que a embrulha é
+  apagado junto. Quem liga, liga sabendo, em Configurações, depois de ler o
+  aviso.
+- **Senha decifrada em `string` imutável do V8**: `Credential.password` é
+  `string` (`src/types/vault.ts`), e `decryptRecord` (`src/main/crypto.ts`)
+  materializa a senha em uma string que **não pode ser zerada**: `fill(0)`
+  existe para `Buffer`, e a V8 guarda a string imutável no heap, com possível
+  cópia em garbage collector e nos snapshots de heap usados pelo devtools. Só o
+  `Buffer` de 32 bytes da chave (`VaultSessionManager.wipe`) e as chaves de
+  trabalho derivadas (`fill(0)` nos `finally` de `unlock.ts`,
+  `unwrapping.ts`, `vault.ts` e `crypto.ts`) são realmente apagados. Aceito
+  porque o atacante do mesmo usuário que já leu a memória do processo lê também
+  a string; zerar a chave não fecharia esse caminho sozinho.
+- **`entries:list` entrega todas as senhas ao renderer**: o canal
+  `entries:list` (`src/main/entries.ts`) devolve a lista inteira de credenciais
+  **decifradas** ao processo renderer, que é um segundo processo com cópia em
+  memória fora do controle do `VaultSessionManager`: o `wipe` zera a chave do
+  main, mas não as strings que já foram copiadas para lá. Aceito porque o
+  renderer precisa exibir os dados e porque os dois processos compartilham o
+  mesmo uid (mesmo nível de ameaça de `/proc/<pid>/mem`, já listado acima);
+  fechar isso exigiria não entregar a lista inteira e mudar a UX da grade.
+- **A auditoria de dependências não é garantia**: `npm run security:audit`
+  (OSV Scanner) e o CodeQL varrem o lockfile e o código, e nenhum dos dois
+  detecta dependência sem CVE conhecido que seja maliciosa por desenho. O
+  risco real continua sendo o código empacotado em `out/`, que sai de
+  `package-lock.json` e do build local.
+- **A sobrescrita não é garantia em SSD**: o Cryptographic Erase é a estratégia
+  primária justamente porque invalida o acesso pela chave, independentemente de
+  para onde o controlador de wear leveling moveu o bloco físico. Já a
+  sobrescrita (`shredFile`) **não é garantia** em SSD: com wear leveling e
+  over-provisioning, a escrita pode acabar em outro bloco físico e o conteúdo
+  antigo sobrar no espaço que o controlador gerencia. Em disco rotacional
+  (HDD) a sobrescrita é a defesa; em SSD ela é higiene. Sem a chave do cofre, o
+  `.zke` é ruído de qualquer forma, e é isso que fecha o caso.
+- **Sem `mlock`: a chave pode ir para swap**: o Node não expõe `mlock` sem
+  extensão nativa, então a chave de 32 bytes fica em memória paginável e o
+  kernel pode escrevê-la em swap ou em arquivo hibernado. Travar a página
+  exigiria `libsodium-wrappers` ou um addon nativo, com o custo colateral em
+  `.osv-scanner.toml`, `THIRD-PARTY-NOTICES.txt` e no perfil AppArmor. Decisão:
+  **não fazer**; o ganho é pequeno (quem tem o mesmo usuário já lê
+  `/proc/<pid>/mem`, e quem controla o swap controla a máquina) e o custo é
+  grande (dependência nativa,surface de ataque e empacotamento). Swap
+  criptografado permanece como mitigação do sistema.
 
 ## Fora de escopo
 

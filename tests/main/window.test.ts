@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { app, BrowserWindow, clipboard, ipcMain, session, shell } from '../mocks/electron.ts';
 import { activityMonitor, IDLE_LOCK_MS } from '@zero/main/activity';
+import { currentMessages } from '@zero/main/i18n';
+import { isVaultLockedError } from '@zero/main/vault';
+import { vaultSession } from '@zero/main/session';
 import '@zero/main/index';
 
 /**
@@ -130,5 +133,80 @@ describe('guardas de navegação e sessão', () => {
     expect(channels).toContain('entries:list');
     expect(channels).toContain('shell:open-domain');
     expect(channels).toContain('clipboard:copy');
+  });
+
+  it('desliga a decodificação de vídeo, que o app não usa, ao subir', () => {
+    // sem isso, o Chromium imprime `libva error: iHD_drv_video.so init failed`
+    // ao iniciar em máquina com o driver VA-API do Intel quebrado
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-accelerated-video-decode');
+  });
+});
+
+describe('sessão perdida durante uma operação do cofre', () => {
+  /**
+   * A chave pode sumir entre o status que o renderer recebeu e a chamada de
+   * dados que ele fez em seguida: é o auto-lock disparando com a tela montada,
+   * e é também o restart do processo main em `npm run dev`, que recria o
+   * Singleton vazio e deixa o renderer com a tela antiga. Sem o aviso, o app
+   * fica travado num erro que ninguém entende; com ele, o renderer reconsulta o
+   * status e volta para a autenticação.
+   */
+  function invoke(channel: string, ...args: unknown[]): unknown {
+    const handler = ipcMain.handle.mock.calls.find(([name]) => name === channel)?.[1];
+    expect(handler).toBeTypeOf('function');
+    return handler?.({ senderFrame: { url: 'guardinha://app/index.html' } }, ...args);
+  }
+
+  it('recusa a operação e avisa o renderer pelo canal do auto-lock', async () => {
+    const win = await waitForWindow();
+    const send = vi.spyOn(win.webContents, 'send').mockClear();
+    vaultSession().wipe(); // a sessão foi zerada depois da tela montar
+
+    expect(() => invoke('entries:list')).toThrow(currentMessages().errors.vaultLocked);
+
+    // o aviso é o que tira o renderer da tela quebrada
+    expect(send).toHaveBeenCalledWith(
+      'vault:auto-locked',
+      expect.objectContaining({ locked: true }),
+    );
+  });
+
+  it('não devolve lista vazia quando a sessão se foi (fail-open seria pior)', () => {
+    vaultSession().wipe();
+
+    // devolver [] faria o app parecer um cofre vazio, que é a pior leitura
+    // possível num app de credenciais; a resposta tem que ser erro
+    expect(() => invoke('entries:list')).toThrow();
+  });
+
+  it('avisa também em entries:save e entries:delete', async () => {
+    const win = await waitForWindow();
+    const send = vi.spyOn(win.webContents, 'send').mockClear();
+    vaultSession().wipe();
+
+    expect(() =>
+      invoke('entries:save', {
+        title: 'x',
+        username: '',
+        password: '',
+        domain: '',
+        notes: '',
+      }),
+    ).toThrow();
+    expect(() => invoke('entries:delete', 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')).toThrow();
+
+    expect(send.mock.calls.filter(([channel]) => channel === 'vault:auto-locked')).toHaveLength(2);
+  });
+
+  it('não avisa quando o erro é outro (adulteração, id inválido)', () => {
+    const m = currentMessages();
+    // o discriminador é a mensagem do Singleton: só ela dispara o aviso, para
+    // que uma falha de domínio comum não faça o renderer sair da tela à toa
+    expect(isVaultLockedError(new Error(m.errors.vaultLocked))).toBe(true);
+    expect(isVaultLockedError(new Error(m.errors.invalidId))).toBe(false);
+    expect(isVaultLockedError(new Error(m.errors.vaultTampered))).toBe(false);
+    expect(isVaultLockedError(new Error(m.errors.entryNotFound))).toBe(false);
+    expect(isVaultLockedError('texto solto')).toBe(false);
+    expect(isVaultLockedError(null)).toBe(false);
   });
 });
