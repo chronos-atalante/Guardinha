@@ -1,12 +1,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron';
-import { createVault, getStatus, lock, resetPin, unlock } from '@zero/main/vault';
+import {
+  createVault,
+  getStatus,
+  isVaultLockedError,
+  lock,
+  panicDestroy,
+  resetPin,
+  setNukeLimit,
+  setPanicPin,
+  clearPanicPin,
+  panicStatus,
+  unlock,
+} from '@zero/main/vault';
 import { activityMonitor } from '@zero/main/activity';
 import { validateDomainFormat } from '@zero/main/auth';
 import { removeEntry, saveEntry, listEntries } from '@zero/main/entries';
 import { generateHighEntropyPassword } from '@zero/main/crypto';
 import { secureClipboard } from '@zero/main/clipboard';
+import { vaultStorage } from '@zero/main/facade';
 import { loadSettings, saveSettings } from '@zero/main/settings';
 import { currentMessages } from '@zero/main/i18n';
 import type {
@@ -14,9 +27,18 @@ import type {
   CreateVaultInput,
   CredentialInput,
   GeneratorOptions,
+  PanicPinInput,
   ResetPinInput,
   UnlockInput,
 } from '@zero/types';
+
+/**
+ * Temporário órfão só é perigoso enquanto pode ser confundido com uma escrita
+ * em curso; depois de um minuto ele é lixo puro (e, no caso do `.tmp` do
+ * container, uma cópia dos blobs de chave). A varredura roda uma vez, aqui no
+ * boot, antes de o primeiro `vault:status` responder.
+ */
+const STALE_TMP_MS = 60_000;
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -92,6 +114,24 @@ function registerPermissionPolicy(): void {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
+}
+
+/**
+ * Silencia o erro de VA-API que o Chromium imprime ao subir em máquina com o
+ * driver de vídeo Intel quebrado (`libva error: iHD_drv_video.so init failed`).
+ *
+ * A opção é a mais estreita possível: `--disable-accelerated-video-decode`
+ * afeta **apenas decodificação de vídeo**, e o app não tem vídeo nenhum (nenhum
+ * `<video>`, WebCodecs ou captura de canvas). A composição de tela e o WebGL
+ * continuam na GPU. Desligar a GPU inteira resolveria a mensagem também, mas
+ * trocariaAcceleration da interface por software em todas as máquinas, o que é
+ * um custo real para esconder uma linha cosmética.
+ *
+ * Não é ligado só no dev de propósito: um switch que só existe em
+ * desenvolvimento significa que o app nunca é testado como ele é publicado.
+ */
+function disableVideoDecode(): void {
+  app.commandLine.appendSwitch('disable-accelerated-video-decode');
 }
 
 const APP_SCHEME = 'guardinha';
@@ -200,7 +240,34 @@ function assertAppFrame(event: unknown): void {
   }
 }
 
+/**
+ * Operação que exige a chave do cofre, com aviso de sessão perdida.
+ *
+ * A chave pode sumir entre o momento em que o renderer recebe o status e o
+ * momento em que ele pede os dados: é o que acontece no auto-lock (o timer
+ * dispara enquanto a tela está montada) e também quando o processo main
+ * reinicia em `npm run dev`, que recria o `VaultSessionManager` vazio e deixa
+ * o renderer com a tela que ele já tinha. Sem aviso, o renderer fica chamando
+ * um cofre que não existe mais e a tela trava num erro que ninguém explica.
+ *
+ * A resposta continua sendo **erro**: devolver lista vazia seria fail-open e o
+ * app apareceria como um cofre vazio, que é a pior leitura possível num app de
+ * credenciais. O que muda é o main avisar pelo mesmo canal do auto-lock, para
+ * o renderer reconsultar o status e voltar para a autenticação.
+ */
+function withSessionNotice<T>(run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (isVaultLockedError(error)) {
+      mainWindow?.webContents.send('vault:auto-locked', getStatus());
+    }
+    throw error;
+  }
+}
+
 function registerIpc(): void {
+  vaultStorage.cleanTempFiles(STALE_TMP_MS);
   ipcMain.handle('vault:status', (event) => {
     assertAppFrame(event);
     return getStatus();
@@ -222,6 +289,36 @@ function registerIpc(): void {
     return lock();
   });
 
+  /**
+   * Autodestruição sob comando explícito do usuário. A confirmação em duas
+   * etapas mora no renderer (digitar DESTRUIR); aqui a fronteira de segurança é
+   * só a origem do frame, como em qualquer outro canal.
+   */
+  ipcMain.handle('vault:destroy', (event) => {
+    assertAppFrame(event);
+    return panicDestroy();
+  });
+
+  // ---- Proteções de pânico (PIN de coação e autodestruição por tentativas) ----
+  // Canal novo exige `assertAppFrame`: sem ele o domínio fica aberto a frame de
+  // fora, e um canal de autodestruição aberto é o pior caso possível.
+  ipcMain.handle('vault:set-panic-pin', (event, input: PanicPinInput) => {
+    assertAppFrame(event);
+    return setPanicPin(input);
+  });
+  ipcMain.handle('vault:clear-panic-pin', (event) => {
+    assertAppFrame(event);
+    return clearPanicPin();
+  });
+  ipcMain.handle('vault:set-nuke-limit', (event, limit: number) => {
+    assertAppFrame(event);
+    return setNukeLimit(limit);
+  });
+  ipcMain.handle('vault:panic-status', (event) => {
+    assertAppFrame(event);
+    return panicStatus();
+  });
+
   /** Abre o domínio da credencial no navegador padrão (só http/https). */
   ipcMain.handle('shell:open-domain', (event, domain: string) => {
     assertAppFrame(event);
@@ -235,15 +332,15 @@ function registerIpc(): void {
 
   ipcMain.handle('entries:list', (event) => {
     assertAppFrame(event);
-    return listEntries();
+    return withSessionNotice(listEntries);
   });
   ipcMain.handle('entries:save', (event, entry: CredentialInput) => {
     assertAppFrame(event);
-    return saveEntry(entry);
+    return withSessionNotice(() => saveEntry(entry));
   });
   ipcMain.handle('entries:delete', (event, id: string) => {
     assertAppFrame(event);
-    return removeEntry(id);
+    return withSessionNotice(() => removeEntry(id));
   });
 
   /** Copia para o clipboard nativo e limpa sozinho 30 s depois (no main). */
@@ -312,6 +409,9 @@ if (!gotLock) {
       mainWindow.focus();
     }
   });
+
+  // switch de linha de comando precisa estar antes do `whenReady`
+  disableVideoDecode();
 
   app
     .whenReady()

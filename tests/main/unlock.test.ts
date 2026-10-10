@@ -21,6 +21,8 @@ async function makeContainer(): Promise<VaultContainerData> {
     kdf: keyUnwrapperFor('pin').kdf,
     attempts: 0,
     lockUntil: null,
+    attemptsMaster: 0,
+    nukeLimit: 0,
     methods: {
       pin: await keyUnwrapperFor('pin').wrap(key, PIN),
       master: await keyUnwrapperFor('master').wrap(key, MASTER),
@@ -77,7 +79,7 @@ describe('runUnlockChain (Chain of Responsibility)', () => {
 
   it('trava exponencial corta antes de qualquer derivação e não gasta tentativa', async () => {
     resetAttempts();
-    registerFailedAttempt(); // 1 falha já trava 10 s na sequência do app
+    registerFailedAttempt('pin'); // 1 falha já trava 10 s na sequência do app
     const state = loadAuthState();
     expect(state.lockUntil).not.toBeNull();
 
@@ -100,7 +102,7 @@ describe('runUnlockChain (Chain of Responsibility)', () => {
     // ANÁLISE.md, vetor 9: a recusa durante a trava precisa ser barata
     const container = await makeContainer();
     resetAttempts();
-    registerFailedAttempt();
+    registerFailedAttempt('pin');
 
     const started = Date.now();
     const result = await runUnlockChain(context(PIN, 'pin', container));
@@ -122,7 +124,7 @@ describe('runUnlockChain (Chain of Responsibility)', () => {
 
   it('statusFrom expõe tentativa, espera e travado', () => {
     resetAttempts();
-    registerFailedAttempt();
+    registerFailedAttempt('pin');
     const status = statusFrom(loadAuthState(), true, true);
     expect(status).toMatchObject({ exists: true, locked: true, attempts: 1 });
     expect(status.lockRemainingMs).toBeGreaterThan(0);

@@ -13,6 +13,7 @@ const CREDENTIALS: Record<CredentialKind, string> = {
   master: MASTER,
   pin: PIN,
   recovery: PHRASE,
+  panic: '78304412',
 };
 
 /** Embrulha com a outra credencial e verifica que o GCM recusa o payload. */

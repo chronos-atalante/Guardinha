@@ -6,23 +6,24 @@ Todo texto vem do contexto de idioma (`useMessages()`), nunca embutido no JSX.
 
 ## Componentes (`src/renderer/src/`)
 
-| Componente          | Papel                                                                 |
-| ------------------- | --------------------------------------------------------------------- |
-| `App.tsx`           | Carrega idioma e status, decide entre `AuthModal` ou as abas          |
-| `Sidebar`           | Navegação, seletor de idioma, botão de bloqueio e status "local"      |
-| `LanguageSelect`    | Troca o idioma e persiste em `settings.json`                          |
-| `Home`              | Lista de credenciais com busca e ações                                |
-| `EntryModal`        | Criar/editar credencial, com excluir quando é edição                  |
-| `AuthModal`         | Criação do cofre, desbloqueio e redefinição de PIN                    |
-| `Generator`         | Senha aleatória com comprimento, gostos e entropia pessoal            |
-| `SensitivitySlider` | Slider acessível do comprimento no Gerador (arraste, teclado, `aria`) |
-| `StrengthMeter`     | Barra de força com nível, motivos e dica                              |
-| `Credits`           | Pós-créditos de cinema com as dependências em rolagem                 |
-| `Settings`          | Tela de configurações (ainda com aviso de "chega futuramente")        |
-| `Toast`             | Aviso curto de cópia e de sucesso                                     |
-| `i18n.tsx`          | `MessagesProvider`, `useMessages()`, `useLanguage()`, `richText()`    |
-| `clipboard.ts`      | Encerra a cópia no canal `clipboard:copy` (limpeza no main)           |
-| `formatters.ts`     | Contagem de palavras, contagem regressiva e erro legível              |
+| Componente          | Papel                                                                   |
+| ------------------- | ----------------------------------------------------------------------- |
+| `App.tsx`           | Carrega idioma e status, decide entre `AuthModal` ou as abas            |
+| `Sidebar`           | Navegação, seletor de idioma, bloqueio, autodestruição e status "local" |
+| `LanguageSelect`    | Troca o idioma e persiste em `settings.json`                            |
+| `Home`              | Lista de credenciais com busca e ações                                  |
+| `EntryModal`        | Criar/editar credencial, com excluir quando é edição                    |
+| `AuthModal`         | Criação do cofre, desbloqueio e redefinição de PIN                      |
+| `Generator`         | Senha aleatória com comprimento, gostos e entropia pessoal              |
+| `SensitivitySlider` | Slider acessível do comprimento no Gerador (arraste, teclado, `aria`)   |
+| `StrengthMeter`     | Barra de força com nível, motivos e dica                                |
+| `Credits`           | Pós-créditos de cinema com as dependências em rolagem                   |
+| `Settings`          | PIN de pânico e autodestruição por tentativas da senha mestra           |
+| `DestroyModal`      | Confirmação em duas etapas da autodestruição (digitar a palavra)        |
+| `Toast`             | Aviso curto de cópia e de sucesso                                       |
+| `i18n.tsx`          | `MessagesProvider`, `useMessages()`, `useLanguage()`, `richText()`      |
+| `clipboard.ts`      | Encerra a cópia no canal `clipboard:copy` (limpeza no main)             |
+| `formatters.ts`     | Contagem de palavras, contagem regressiva e erro legível                |
 
 ## Abas da Sidebar
 
@@ -31,10 +32,32 @@ Todo texto vem do contexto de idioma (`useMessages()`), nunca embutido no JSX.
 | Início (Senhas)   | `Home`      | Busca, contagem, lista e botão de nova credencial     |
 | Gerador de Senhas | `Generator` | Slider de comprimento, três chaves e entropia pessoal |
 | Atribuições       | `Credits`   | Créditos em rolagem, com pausa no hover               |
-| Configurações     | `Settings`  | Cartão de aviso (idioma continua na Sidebar)          |
+| Configurações     | `Settings`  | PIN de pânico e autodestruição por tentativas         |
 
 O rodapé da Sidebar mostra que os dados estão locais. O botão de bloqueio chama
 `vault.lock()` e volta para a aba Início.
+
+Logo abaixo do bloqueio fica o botão de **autodestruição**. Ele não apaga nada
+sozinho: abre o `DestroyModal`, que exige digitar a palavra `DESTRUIR`
+(`DESTROY` em inglês) antes de liberar o botão de ação. Destruir o cofre é
+irreversível e o botão mora a um clique do bloqueio, então a confirmação em duas
+etapas é o que separa um toque acidental de uma decisão. Depois do clique, o
+app volta para a tela de criação de cofre, como se aquele cofre nunca tivesse
+existido, e mostra um aviso de "cofre destruído" (não um erro, porque não foi
+erro).
+
+## Tela de Configurações
+
+Duas seções, ambas exigindo cofre desbloqueado (o main exige a chave para
+gravar no container):
+
+- **PIN de pânico**: define ou remove um PIN de 8 dígitos que abre um cofre
+  vazio e apaga o de verdade. O botão só habilita com 8 dígitos, e o main
+  recusa PIN previsível e o próprio PIN do cofre.
+- **Autodestruição por tentativas**: liga ou desliga o limite de falhas da
+  senha mestra. O padrão é desligado, e o piso é 50. Ativar mostra um texto de
+  aviso antes do campo de confirmação, porque a frase de recuperação não salva
+  nessa situação.
 
 ## Fluxo de criação do cofre
 

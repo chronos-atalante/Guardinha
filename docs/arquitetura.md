@@ -35,20 +35,26 @@ entrypoints que o Electron exige) e arquivo no teto de ~500 linhas é quebrado.
 
 ### Módulos do processo main
 
-| Arquivo         | Papel                                                                               |
-| --------------- | ----------------------------------------------------------------------------------- |
-| `index.ts`      | Entrypoint: janela, protocolo `guardinha://`, política da sessão, canais IPC e push |
-| `vault.ts`      | Ciclo de vida do cofre (criar, desbloquear, redefinir o PIN, travar)                |
-| `session.ts`    | `VaultSessionManager` (Singleton): guarda e zeragem da chave; assina o monitor      |
-| `activity.ts`   | `ActivityMonitor` (Observer): temporizador de ociosidade e ouvintes de idle         |
-| `unlock.ts`     | Cadeia de desbloqueio (Chain of Responsibility): trava, formato, KDF e integridade  |
-| `unwrapping.ts` | Embrulho/desembrulho da chave por tipo de credencial (Factory Method)               |
-| `facade.ts`     | `VaultStorageFacade` (Fachada): fs, AES-256-GCM e manifesto num ponto só            |
-| `clipboard.ts`  | `SecureClipboardProxy` (Proxy): clipboard nativo com limpeza em 30 s                |
-| `entries.ts`    | CRUD de credenciais sobre a fachada (sem `fs` nem cifra na mão)                     |
-| `crypto.ts`     | Argon2id, AES-256-GCM, HKDF e gerador de senha                                      |
-| `storage.ts`    | Persistência de baixo nível (`fs-extra`), chamada pela fachada e por `auth.ts`      |
-| `auth.ts`       | Trava exponencial, `statusFrom` e validações de formato                             |
+| Arquivo            | Papel                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| `index.ts`         | Entrypoint: janela, protocolo `guardinha://`, política da sessão, canais IPC e push |
+| `vault.ts`         | Ciclo de vida do cofre (criar, desbloquear, redefinir o PIN, travar)                |
+| `session.ts`       | `VaultSessionManager` (Singleton): guarda e zeragem da chave; assina o monitor      |
+| `activity.ts`      | `ActivityMonitor` (Observer): temporizador de ociosidade e ouvintes de idle         |
+| `unlock.ts`        | Cadeia de desbloqueio (Chain of Responsibility): trava, formato, KDF e integridade  |
+| `unwrapping.ts`    | Embrulho/desembrulho da chave por tipo de credencial (Factory Method)               |
+| `facade.ts`        | `VaultStorageFacade` (Fachada): fs, AES-256-GCM e manifesto num ponto só            |
+| `clipboard.ts`     | `SecureClipboardProxy` (Proxy): clipboard nativo com limpeza em 30 s                |
+| `entries.ts`       | CRUD de credenciais sobre a fachada (sem `fs` nem cifra na mão)                     |
+| `crypto.ts`        | Argon2id, AES-256-GCM, HKDF e gerador de senha                                      |
+| `layout.ts`        | Onde o cofre mora: resolve caminhos, sem `fs` e sem Electron                        |
+| `structure.ts`     | Pastas do cofre, permissões e migração do layout oculto                             |
+| `storage.ts`       | O `vault.zkv` e as migrações dos formatos anteriores, chamada pela fachada          |
+| `entries-store.ts` | Os arquivos `.zke`/`.enc` de cada credencial                                        |
+| `shred.ts`         | Sobrescrita antes do `unlink` (`O_NOFOLLOW`, `fsync`); primitiva de baixo nível     |
+| `erase.ts`         | Cryptographic Erase: apaga o container, as entradas e a pasta                       |
+| `erasure-state.ts` | Estado de destruição do processo; a guarda que impede o container de ressuscitar    |
+| `auth.ts`          | Trava exponencial, `statusFrom` e validações de formato                             |
 
 ## Aliases `@zero/*`
 

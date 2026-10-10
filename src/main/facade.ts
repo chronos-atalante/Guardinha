@@ -2,22 +2,26 @@ import { decryptRecord, encryptRecord, randomUuid } from '@zero/main/crypto';
 import {
   createVaultKey,
   deleteEntry,
-  ensureVaultStructure,
-  initManifest,
-  isVaultDirUnavailable,
   listEntryIds,
   readEntryPayload,
+  writeEntryPayload,
+} from '@zero/main/entries-store';
+import {
+  initManifest,
+  isVaultDirUnavailable,
   readVaultContainer,
   updateManifest,
   vaultExists,
   vaultPath,
   verifyManifest,
-  writeEntryPayload,
   writeVaultContainer,
 } from '@zero/main/storage';
+import { ensureVaultStructure } from '@zero/main/structure';
+import { cleanStaleTempFiles } from '@zero/main/entries-store';
+import { eraseVault } from '@zero/main/erase';
 import { currentMessages } from '@zero/main/i18n';
 import type { VaultContainerData } from '@zero/main/container';
-import type { Credential } from '@zero/types';
+import type { Credential, EraseResult } from '@zero/types';
 
 function tampered(): Error {
   return new Error(currentMessages().errors.vaultTampered);
@@ -143,6 +147,26 @@ export class VaultStorageFacade {
   public removeRecord(id: string, vaultKey: Buffer): void {
     deleteEntry(id);
     updateManifest(vaultKey);
+  }
+
+  // ---------- Destruição do cofre ----------
+
+  /**
+   * Cryptographic Erase: apaga o container (que guarda a chave embrulhada) e
+   * todas as entradas, com sobrescrita antes do `unlink`. Só quem chama isto
+   * decide se o cofre morre (botão de pânico, PIN de coação, limite de
+   * tentativas); aqui é a operação crua.
+   */
+  public erase(): EraseResult {
+    return eraseVault();
+  }
+
+  /**
+   * Temporários órfãos de um crash, que o manifesto não cobre. Roda uma vez na
+   * inicialização, antes do primeiro `getStatus` responder.
+   */
+  public cleanTempFiles(maxAgeMs: number): { removed: number; kept: number } {
+    return cleanStaleTempFiles(maxAgeMs);
   }
 }
 

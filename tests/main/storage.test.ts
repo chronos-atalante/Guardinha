@@ -7,13 +7,12 @@ import { packEntryPayload, packVaultContainer } from '@zero/main/container';
 import { currentMessages } from '@zero/main/i18n';
 import {
   deleteEntry,
-  ensureVaultStructure,
   listEntryIds,
   readEntryPayload,
-  readVaultContainer,
-  vaultExists,
   writeEntryPayload,
-} from '@zero/main/storage';
+} from '@zero/main/entries-store';
+import { ensureVaultStructure } from '@zero/main/structure';
+import { readVaultContainer, vaultExists } from '@zero/main/storage';
 import type { VaultContainerData } from '@zero/main/container';
 
 const LEGACY_ENVELOPE = {
@@ -182,6 +181,8 @@ describe('migração do intermediário XDG (~/.local/share)', () => {
       kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
       attempts: 1,
       lockUntil: null,
+      attemptsMaster: 0,
+      nukeLimit: 0,
       methods: {
         master: {
           kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },

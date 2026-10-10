@@ -8,6 +8,7 @@ import { Generator } from '@zero/renderer/components/Generator';
 import { Credits } from '@zero/renderer/components/Credits';
 import { Settings } from '@zero/renderer/components/Settings';
 import { AuthModal } from '@zero/renderer/components/AuthModal';
+import { DestroyModal } from '@zero/renderer/components/DestroyModal';
 import { Toast } from '@zero/renderer/components/Toast';
 import type { Language, VaultStatus } from '@zero/types';
 
@@ -22,10 +23,17 @@ function Shell({ status, language, onLanguageChange, onRefresh }: ShellProps): J
   const m = useMessages();
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [toast, setToast] = useState<string | null>(null);
+  const [confirmDestroy, setConfirmDestroy] = useState(false);
 
   const handleLock = async (): Promise<void> => {
     await window.api.vault.lock();
     setActiveTab('home');
+    await onRefresh();
+  };
+
+  const handleDestroyed = async (): Promise<void> => {
+    setActiveTab('home');
+    setToast(m.panic.destroyed);
     await onRefresh();
   };
 
@@ -51,6 +59,7 @@ function Shell({ status, language, onLanguageChange, onRefresh }: ShellProps): J
         onLock={() => {
           void handleLock();
         }}
+        onDestroy={() => setConfirmDestroy(true)}
       />
       <main className="flex-1 bg-slate-950 overflow-y-auto p-8">
         {activeTab === 'home' && <Home onToast={setToast} />}
@@ -58,6 +67,12 @@ function Shell({ status, language, onLanguageChange, onRefresh }: ShellProps): J
         {activeTab === 'credits' && <Credits />}
         {activeTab === 'settings' && <Settings />}
       </main>
+      {confirmDestroy && (
+        <DestroyModal
+          onClose={() => setConfirmDestroy(false)}
+          onDestroyed={() => handleDestroyed()}
+        />
+      )}
       <Toast message={toast} onClose={() => setToast(null)} />
     </div>
   );

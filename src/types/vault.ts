@@ -48,9 +48,35 @@ export interface ResetPinInput {
   newPin: string;
 }
 
+/** Instalação do PIN de coação (exige cofre desbloqueado). */
+export interface PanicPinInput {
+  pin: string;
+}
+
+/**
+ * Estado das proteções de pânico do cofre. `hasPanicPin` diz se existe um
+ * caminho de coação instalado; `nukeLimit` é o teto de tentativas da senha
+ * mestra, com `0` significando desligado (que é o padrão).
+ */
+export interface PanicStatus {
+  hasPanicPin: boolean;
+  nukeLimit: number;
+  attemptsMaster: number;
+}
+
 /** Resultado de uma operação de cofre, com o status atualizado. */
 export interface VaultResult {
   ok: boolean;
   error?: string;
   status: VaultStatus;
+}
+
+/**
+ * Resultado do Cryptographic Erase: quantos arquivos foram sobrescritos e
+ * apagados, e quantos resistiram. Só serve para diagnóstico; a autodestruição
+ * é lógica mesmo quando algum arquivo não pôde ser tocado.
+ */
+export interface EraseResult {
+  shredded: number;
+  failed: number;
 }

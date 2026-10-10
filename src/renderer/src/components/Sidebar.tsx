@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { Dices, Film, Key, Lock, Settings, Shield } from 'lucide-react';
+import { Dices, Film, Key, Lock, Settings, Shield, ShieldAlert } from 'lucide-react';
 import { LanguageSelect } from '@zero/renderer/components/LanguageSelect';
 import { useMessages } from '@zero/renderer/i18n';
 import type { Language } from '@zero/types';
@@ -12,6 +12,8 @@ interface SidebarProps {
   language: Language;
   onLanguageChange: (language: Language) => void;
   onLock: () => void;
+  /** Abre o diálogo de confirmação da autodestruição. */
+  onDestroy: () => void;
 }
 
 type NavLabelKey = 'home' | 'generator' | 'credits' | 'settings';
@@ -29,6 +31,7 @@ export function Sidebar({
   language,
   onLanguageChange,
   onLock,
+  onDestroy,
 }: SidebarProps): JSX.Element {
   const m = useMessages();
 
@@ -68,15 +71,28 @@ export function Sidebar({
           <LanguageSelect language={language} onLanguageChange={onLanguageChange} />
         </div>
 
-        <button
-          type="button"
-          onClick={onLock}
-          title={m.app.lockTitle}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 bg-slate-800/60 hover:bg-slate-800 hover:text-slate-200 border border-slate-800 transition-colors"
-        >
-          <Lock className="w-3.5 h-3.5" />
-          {m.app.lock}
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={onLock}
+            title={m.app.lockTitle}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 bg-slate-800/60 hover:bg-slate-800 hover:text-slate-200 border border-slate-800 transition-colors"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            {m.app.lock}
+          </button>
+          {/* A autodestruição é irreversível: fica longe do "Bloquear cofre" e
+              ainda exige digitar uma palavra no diálogo. */}
+          <button
+            type="button"
+            onClick={onDestroy}
+            title={m.panic.manualTitle}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400/80 bg-red-950/20 hover:bg-red-950/40 hover:text-red-300 border border-red-900/50 transition-colors"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            {m.panic.manualTitle}
+          </button>
+        </div>
       </div>
 
       <div className="text-xs text-slate-500 px-2 text-center border-t border-slate-800 pt-3">

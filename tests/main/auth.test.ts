@@ -14,6 +14,7 @@ import {
 import { writeVaultContainer } from '@zero/main/storage';
 
 const BASE = new Date('2026-01-01T12:00:00Z').getTime();
+const EMPTY_STATE = { attempts: 0, lockUntil: null, attemptsMaster: 0, nukeLimit: 0 };
 
 /**
  * A trava exponencial agora vive dentro do `vault.zkv` (nada de JSON legível);
@@ -26,6 +27,8 @@ function seedContainer(): void {
     kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
     attempts: 0,
     lockUntil: null,
+    attemptsMaster: 0,
+    nukeLimit: 0,
     methods: {
       master: {
         kdf: { algo: 'argon2id', memoryKiB: 65536, iterations: 3, parallelism: 4 },
@@ -69,31 +72,100 @@ describe('trava exponencial', () => {
   it('registerFailedAttempt incrementa e persiste o lockUntil', () => {
     vi.useFakeTimers();
     vi.setSystemTime(BASE);
-    const first = registerFailedAttempt();
+    const first = registerFailedAttempt('pin').state;
     expect(first.attempts).toBe(1);
     expect(first.lockUntil).toBe(BASE + 10_000);
     expect(loadAuthState()).toEqual(first);
 
     vi.setSystemTime(BASE + 15_000);
-    const second = registerFailedAttempt();
+    const second = registerFailedAttempt('pin').state;
     expect(second.attempts).toBe(2);
     expect(second.lockUntil).toBe(BASE + 15_000 + 30_000);
   });
 
   it('resetAttempts limpa a trava', () => {
-    registerFailedAttempt();
+    registerFailedAttempt('pin');
     resetAttempts();
-    expect(loadAuthState()).toEqual({ attempts: 0, lockUntil: null });
+    expect(loadAuthState()).toEqual({
+      attempts: 0,
+      lockUntil: null,
+      attemptsMaster: 0,
+      nukeLimit: 0,
+    });
   });
 
   it('getLockRemainingMs zera após o prazo e ignora lockUntil nulo', () => {
     vi.useFakeTimers();
     vi.setSystemTime(BASE);
-    registerFailedAttempt();
+    registerFailedAttempt('pin');
     expect(getLockRemainingMs(loadAuthState())).toBe(10_000);
     vi.setSystemTime(BASE + 11_000);
     expect(getLockRemainingMs(loadAuthState())).toBe(0);
-    expect(getLockRemainingMs({ attempts: 0, lockUntil: null })).toBe(0);
+    expect(getLockRemainingMs(EMPTY_STATE)).toBe(0);
+  });
+});
+
+describe('contadores separados por método (atemptsMaster)', () => {
+  beforeAll(() => {
+    seedContainer();
+  });
+
+  afterAll(() => {
+    resetAttempts();
+  });
+
+  it('falha da senha mestra soma em attemptsMaster', () => {
+    resetAttempts();
+    const first = registerFailedAttempt('master').state;
+    expect(first.attempts).toBe(1);
+    expect(first.attemptsMaster).toBe(1);
+
+    const second = registerFailedAttempt('master').state;
+    expect(second.attempts).toBe(2);
+    expect(second.attemptsMaster).toBe(2);
+  });
+
+  it('falha de PIN não soma em attemptsMaster', () => {
+    resetAttempts();
+    registerFailedAttempt('master');
+    const afterPin = registerFailedAttempt('pin').state;
+    expect(afterPin.attempts).toBe(2); // o contador geral anda
+    expect(afterPin.attemptsMaster).toBe(1); // o da senha mestra, não
+  });
+
+  it('resetAttempts zera os dois contadores', () => {
+    registerFailedAttempt('master');
+    registerFailedAttempt('pin');
+    resetAttempts();
+    const state = loadAuthState();
+    expect(state.attempts).toBe(0);
+    expect(state.attemptsMaster).toBe(0);
+  });
+
+  it('nukeLimit desligado nunca cruza o corte', () => {
+    resetAttempts();
+    let crossed = false;
+    for (let i = 0; i < 200; i++) {
+      crossed = registerFailedAttempt('master', 0).crossed || crossed;
+    }
+    expect(crossed).toBe(false);
+  });
+
+  it('cruza o corte exatamente no limite, só com falha da senha mestra', () => {
+    resetAttempts();
+    const limit = 3;
+    expect(registerFailedAttempt('master', limit).crossed).toBe(false);
+    expect(registerFailedAttempt('master', limit).crossed).toBe(false);
+    expect(registerFailedAttempt('master', limit).crossed).toBe(true);
+  });
+
+  it('PIN errado não cruza o limite, mesmo com o limite armado', () => {
+    resetAttempts();
+    let crossed = false;
+    for (let i = 0; i < 10; i++) {
+      crossed = registerFailedAttempt('pin', 2).crossed || crossed;
+    }
+    expect(crossed).toBe(false);
   });
 });
 

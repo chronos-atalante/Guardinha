@@ -186,6 +186,49 @@ export const ptBR = {
     emptyText:
       'As configurações do Guardinha serão implementadas em uma versão futura. ' +
       'Enquanto isso, o idioma e o bloqueio do cofre continuam aqui na barra lateral.',
+    panicTitle: 'PIN de coação',
+    panicSubtitle:
+      'Um segundo PIN que **abre um cofre vazio** e apaga o cofre de verdade. ' +
+      'Use-o quando alguém estiver olhando. Ele não conta tentativa e funciona mesmo com a trava ativa.',
+    panicLabel: 'PIN de coação (8 dígitos)',
+    panicConfirmLabel: 'Repita o PIN de coação',
+    panicMismatch: 'Os PINs não coincidem.',
+    panicSet: 'Definir PIN de coação',
+    panicClear: 'Remover PIN de coação',
+    panicActive: 'PIN de coação ativo. Guarde-o em local seguro: ele apaga o cofre.',
+    panicInactive: 'Nenhum PIN de coação definido.',
+    nukeTitle: 'Autodestruição por tentativas',
+    nukeSubtitle:
+      'Apaga o cofre depois de **N** erros seguidos da senha mestra. ' +
+      'A frase de recuperação não salva: o arquivo que a guardava também é apagado.',
+    nukeLabel: 'Limite de tentativas da senha mestra',
+    nukeOff: 'Desligada',
+    nukeValue: (n: number): string => `${n} tentativas`,
+    nukeEnable: 'Ativar autodestruição',
+    nukeDisable: 'Desativar autodestruição',
+    nukeConfirmTitle: 'Confirmar autodestruição',
+    nukeConfirmText: (n: number): string =>
+      `Ao atingir ${n} erros seguidos da senha mestra, o cofre é apagado de vez. ` +
+      'Não há como desfazer. Confirme digitando o limite:',
+    nukeConfirmLabel: 'Digite o limite para confirmar',
+  },
+
+  /** Diálogo de autodestruição sob coação e pelo botão de pânico. */
+  panic: {
+    title: 'Destruir o cofre agora',
+    subtitle:
+      'Isto apaga **o cofre inteiro**, sem volta. A chave sai da memória e ' +
+      'os arquivos cifrados são sobrescritos antes de sumirem.',
+    manualTitle: 'Autodestruição',
+    manualSubtitle:
+      'Use isto se acreditar que alguém vai tomar o computador. O app volta a ' +
+      'pedir a criação de um cofre novo, como se este nunca tivesse existido.',
+    confirmNameLabel: 'Digite a palavra abaixo para confirmar:',
+    confirmWord: 'DESTRUIR',
+    confirmMismatch: 'O texto não confere.',
+    action: 'Destruir cofre',
+    working: 'Destruindo…',
+    destroyed: 'Cofre destruído.',
   },
 
   /** Erros emitidos pelo processo main (já localizados no momento da emissão). */
@@ -194,6 +237,10 @@ export const ptBR = {
     vaultMissing: 'Cofre não encontrado em /var/lib/.guardinha/.vault/.',
     vaultLocked: 'Cofre bloqueado: desbloqueie antes de acessar as credenciais.',
     vaultTampered: 'O cofre está incompleto ou foi alterado fora do app.',
+    vaultDestroyed: 'O cofre foi destruído e não pode mais ser aberto.',
+    panicPinSame: 'O PIN de coação não pode ser igual ao PIN que abre o cofre.',
+    invalidNukeLimit: 'Limite de tentativas inválido.',
+    nukeLimitTooLow: 'O limite é baixo demais para não confundir com erro de digitação.',
     vaultDirUnavailable:
       'Sem permissão para gravar em /var/lib/.guardinha/.vault/. ' +
       'Reinstale o .deb com `sudo dpkg -i` para recriar a pasta com as permissões corretas.',

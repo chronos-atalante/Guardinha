@@ -9,6 +9,11 @@ const api: ElectronApi = {
     unlock: (input) => ipcRenderer.invoke('vault:unlock', input),
     resetPin: (input) => ipcRenderer.invoke('vault:resetPin', input),
     lock: () => ipcRenderer.invoke('vault:lock'),
+    destroy: () => ipcRenderer.invoke('vault:destroy'),
+    setPanicPin: (input) => ipcRenderer.invoke('vault:set-panic-pin', input),
+    clearPanicPin: () => ipcRenderer.invoke('vault:clear-panic-pin'),
+    setNukeLimit: (limit) => ipcRenderer.invoke('vault:set-nuke-limit', limit),
+    panicStatus: () => ipcRenderer.invoke('vault:panic-status'),
     onAutoLocked: (listener) => {
       const handler = (_event: IpcRendererEvent, status: Parameters<typeof listener>[0]): void =>
         listener(status);

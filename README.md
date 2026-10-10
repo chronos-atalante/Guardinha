@@ -37,6 +37,12 @@ distribuição em **`.deb`**.
   128 bits gerados por hardware e chave por arquivo via HKDF-SHA512.
 - **Trava exponencial**: 10 s → 30 s → 1 min → 1 h → 24 h por tentativa errada,
   persistida em disco; auto-lock após 5 minutos ocioso.
+- **Destruição segura**: botão de **autodestruição** que apaga o cofre inteiro
+  (Cryptographic Erase: apagar a chave embrulhada torna os dados irrecuperáveis,
+  sem precisar sobrescrever tudo), **PIN de coação** que abre um cofre vazio
+  enquanto aciona a mesma autodestruição, e autodestruição opcional por contagem
+  de erros da senha mestra (**desligada por padrão**). Todo arquivo apagado
+  passa por sobrescrita em blocos antes do `unlink`.
 - **Interface** em coluna com Sidebar (Início, Gerador de Senhas, Atribuições,
   Configurações), busca, copiar usuário/senha, botão de globo que **abre o site
   da credencial no navegador**, gerador de senhas com slider de tamanho,

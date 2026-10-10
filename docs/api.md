@@ -20,13 +20,24 @@ credencial (`credenciais.md`).
 
 ## `window.api.vault`
 
-| Método            | Canal            | Payload → retorno                | Descrição                                                                                                                 |
-| ----------------- | ---------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `status()`        | `vault:status`   | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                                           |
-| `create(input)`   | `vault:create`   | `CreateVaultInput → VaultResult` | Cria o cofre em `/var/lib/.guardinha/.vault/` com frase **escrita pelo usuário** (≥ 12 palavras); valida formato e força. |
-| `unlock(input)`   | `vault:unlock`   | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN.                            |
-| `resetPin(input)` | `vault:resetPin` | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).                                   |
-| `lock()`          | `vault:lock`     | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                                                       |
+| Método                | Canal                   | Payload → retorno                | Descrição                                                                                                                 |
+| --------------------- | ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `status()`            | `vault:status`          | `→ VaultStatus`                  | `exists`, `locked`, `attempts`, `lockUntil`, `lockRemainingMs`.                                                           |
+| `create(input)`       | `vault:create`          | `CreateVaultInput → VaultResult` | Cria o cofre em `/var/lib/.guardinha/.vault/` com frase **escrita pelo usuário** (≥ 12 palavras); valida formato e força. |
+| `unlock(input)`       | `vault:unlock`          | `UnlockInput → VaultResult`      | Desbloqueia com `kind`: `master` \| `pin`; a **senha mestra só aparece após 3 falhas** de PIN.                            |
+| `resetPin(input)`     | `vault:resetPin`        | `ResetPinInput → VaultResult`    | Único uso da frase de recuperação: valida a frase e instala um novo PIN (abre o cofre).                                   |
+| `lock()`              | `vault:lock`            | `→ VaultStatus`                  | Zera a chave em memória e bloqueia.                                                                                       |
+| `destroy()`           | `vault:destroy`         | `→ VaultStatus`                  | Cryptographic Erase: zera a chave da RAM e sobrescreve e apaga o cofre. A confirmação em duas etapas mora no renderer.    |
+| `setPanicPin(input)`  | `vault:set-panic-pin`   | `PanicPinInput → VaultResult`    | Instala o PIN de coação (exige cofre desbloqueado). Recusa o PIN real e PIN previsível.                                   |
+| `clearPanicPin()`     | `vault:clear-panic-pin` | `→ VaultStatus`                  | Remove o caminho de pânico do container.                                                                                  |
+| `setNukeLimit(limit)` | `vault:set-nuke-limit`  | `number → VaultResult`           | Limite estrito de falhas da senha mestra que dispara o erase. `0` desliga; o piso para ligar é 50.                        |
+| `panicStatus()`       | `vault:panic-status`    | `→ PanicStatus`                  | `hasPanicPin`, `nukeLimit` e `attemptsMaster`, para a tela de Configurações.                                              |
+
+Os canais de autodestruição (`vault:destroy`, `vault:set-panic-pin`,
+`vault:clear-panic-pin`, `vault:set-nuke-limit`) são **irreversíveis ou
+permanentes**: por isso todos chamam `assertAppFrame(event)` antes de qualquer
+coisa, e o `vault:destroy` ainda depende de uma confirmação no renderer. Um
+canal de autodestruição aberto a um frame de fora seria o pior caso possível.
 
 ### Push do auto-lock (evento main → renderer)
 
@@ -39,6 +50,16 @@ devolve a função que cancela a assinatura; o App chama
 `unsubscribe()` no cleanup do `useEffect`. O renderer ainda consulta
 `vault.status()` a cada 15 s como rede de segurança, mas a volta à tela de
 autenticação no auto-lock é imediata.
+
+O mesmo evento também é emitido, com um status novo, **quando uma operação que
+precisa da chave descobre que a sessão já foi zerada** (`withSessionNotice`, em
+`src/main/index.ts`). A chave pode sumir entre o status que o renderer recebeu e
+a chamada de dados que ele fez em seguida: é o auto-lock disparando com a tela
+montada, e é também o restart do processo main em `npm run dev`, que recria o
+`VaultSessionManager` vazio e deixa o renderer com a tela antiga. Sem o aviso, o
+renderer ficaria chamando um cofre que não existe mais. A resposta continua
+sendo **erro** (devolver lista vazia faria o app parecer um cofre vazio), e o
+renderer reconsulta o status e volta para a autenticação.
 
 ## `window.api.openDomain`
 
