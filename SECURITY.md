@@ -116,6 +116,11 @@ contrário).
   lockfile, filtro em `.osv-scanner.toml`) roda em todo `npm run check`;
   `npm run lint:shell` varre os scripts de empacotamento; o CodeQL roda no CI
   (push/PR para `main` e semanalmente).
+- **Publicação sob gate de qualidade**: o workflow que gera e publica o `.deb`
+  tem um job **Verificar qualidade** (`npm run check` + `npm test`) e o job de
+  publicação só roda se ele passar. Erro de tipo, lint, formato, auditoria OSV,
+  shellcheck ou teste reprovado interrompe a Release, então nada quebrado chega
+  ao `.deb` que o usuário instala.
 - **Sem servidor intermediário**: o app não abre conexão de rede alguma: não
   há endpoint do Guardinha a atacar; credenciais nunca saem da máquina.
 - **Confinamento AppArmor**: o `.deb` instala um perfil restritivo em
