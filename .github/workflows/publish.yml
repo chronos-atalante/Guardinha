@@ -16,6 +16,10 @@ name: Publicar .deb
 # publicarem a mesma versão duas vezes.
 # Actions fixadas por SHA completo (com a tag na comentário) para não depender
 # da segurança da tag movível; o Dependabot (`github-actions`) atualiza os pins.
+# Gate de qualidade: o job "Verificar qualidade" (npm run check + npm test)
+# roda em paralelo ao "Verificar versão" e o "Gerar e publicar" só começa se
+# os dois passarem; falha de tipo, lint, formato, auditoria OSV, shellcheck ou
+# teste interrompe a publicação.
 on:
   push:
     branches:
@@ -103,9 +107,49 @@ jobs:
           echo "publicar=$PUBLICAR" >> "$GITHUB_OUTPUT"
           echo "Resultado: tag=$TAG publicar=$PUBLICAR"
 
+  qualidade:
+    name: Verificar qualidade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Ferramentas de auditoria (binários fora do git; versões fixadas)
+        run: |
+          set -euo pipefail
+          # `bin/osv-scanner` e `bin/shellcheck` são gitignored (ver
+          # `.gitignore`): a pasta não existe no checkout do CI e o curl
+          # falharia com exit 23 (não consegue criar o arquivo). `mkdir -p`
+          # antes. Versões idênticas às de `docs/build.md`.
+          mkdir -p bin
+          curl -fsSL -o bin/osv-scanner \
+            https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          curl -fsSL -o /tmp/shellcheck.tar.xz \
+            https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          chmod +x bin/osv-scanner
+          # O tarball tem shellcheck-v0.11.0/shellcheck; `--strip-components=1`
+          # joga o diretório fora e o tarball vai para /tmp (fora da pasta que
+          # o `npm run check` lê, para não sobrar lixo no workspace).
+          tar -xJf /tmp/shellcheck.tar.xz --strip-components=1 -C bin shellcheck-v0.11.0/shellcheck
+          rm -f /tmp/shellcheck.tar.xz
+          bin/osv-scanner --version
+          bin/shellcheck --version | head -2
+
+      - name: Typecheck + lint + formato + auditoria OSV + shellcheck
+        run: npm run check
+
+      - name: Testes (Vitest)
+        run: npm test
+
   build-deb:
     name: Gerar e publicar
-    needs: resolver-versao
+    needs: [resolver-versao, qualidade]
     if: needs.resolver-versao.outputs.publicar == 'true'
     runs-on: ubuntu-latest
     steps:

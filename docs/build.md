@@ -90,14 +90,26 @@ Fluxo completo em `CONTRIBUTING.md` (seção 10); resumo do
 `.github/workflows/publish.yml`:
 
 1. Push na `main` ou tag `v*` dispara o workflow **Publicar .deb**.
-2. O job **resolver-versao** compara `package.json` com as Releases e decide se
-   há o que publicar (push sem bump de versão vira execução verde e rápida).
-3. O job **build-deb** compila, roda o `electron-builder`, cria a tag
-   `vX.Y.Z` se não existir e publica a Release.
-4. Na mesma Release sobem o `.deb` e o **repo APT flat assinado**
+2. O job **Verificar versão** (`resolver-versao`) compara `package.json` com as
+   Releases e decide se há o que publicar (push sem bump de versão vira execução
+   verde e rápida).
+3. O job **Verificar qualidade** (`qualidade`) roda em paralelo ao anterior e
+   é o **gate**: `npm run check` (tipo, lint, formato, OSV e shellcheck) e
+   `npm test`. Os binários `osv-scanner` e `shellcheck` são baixados no
+   próprio job, com versão fixada, porque `bin/` é gitignored e não existe no
+   checkout do CI.
+4. O job **Gerar e publicar** (`build-deb`) tem `needs: [resolver-versao,
+qualidade]`: só começa se **os dois** passarem. Falha de tipo, lint,
+   formato, auditoria OSV, shellcheck ou teste interrompe a publicação.
+5. O mesmo job compila, roda o `electron-builder`, cria a tag `vX.Y.Z` se não
+   existir e publica a Release.
+6. Na mesma Release sobem o `.deb` e o **repo APT flat assinado**
    (`Packages`, `Packages.gz`, `Release`, `Release.gpg`, `InRelease`,
    `public.key` e o alias `guardinha_amd64.deb` em `releases/latest/download/`),
    que é o que mantém o `sudo apt upgrade` vivo.
+
+Sem o gate, um erro de tipo ou um teste vermelho só apareceria no `.deb` que o
+usuário instala. Com ele, a falha aparece no pull request.
 
 Secrets necessários: `GPG_PRIVATE_KEY` (e `GPG_PASSPHRASE`, se houver). As
 actions estão fixadas por SHA e atualizadas pelo Dependabot.

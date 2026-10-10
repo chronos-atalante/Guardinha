@@ -69,6 +69,16 @@ em português do Brasil.
   na GPU. Desligar a GPU inteira resolveria a mensagem também, mas trocaria a
   aceleração da interface por software em todas as máquinas.
 
+### Corrigido
+
+- **Publicação sob gate de qualidade**: o workflow que gera e publica o `.deb`
+  ganhou o job **Verificar qualidade** (`npm run check`, com OSV Scanner e
+  shellcheck, mais `npm test`), espelhando o repositório do Chronos Biblioteca.
+  O job de publicação passou a depender dele (`needs: [resolver-versao,
+qualidade]`), então falha de tipo, lint, formato, auditoria ou teste
+  interrompe a Release. Antes, esse tipo de erro só apareceria no `.deb` que o
+  usuário instala.
+
 ### Segurança
 
 - **O container não ressuscita depois de um erase**: `writeVaultContainer`
